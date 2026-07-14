@@ -2,7 +2,15 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppNav } from "@/components/AppNav";
-import { statusBadge, priorityBadge, priorityColor, type Priority, type Status, type TicketComment, type Ticket } from "@/lib/mock-data";
+import {
+  statusBadge,
+  priorityBadge,
+  priorityColor,
+  type Priority,
+  type Status,
+  type TicketComment,
+  type Ticket,
+} from "@/lib/mock-data";
 import {
   CATEGORY_OPTIONS,
   PRIORITY_OPTIONS,
@@ -14,7 +22,10 @@ export const Route = createFileRoute("/tickets/$ticketId")({
   head: ({ params }) => ({
     meta: [
       { title: `${params.ticketId} — SmartTicket` },
-      { name: "description", content: "Detalle del ticket: estado, SLA, comentarios y resolución." },
+      {
+        name: "description",
+        content: "Detalle del ticket: estado, SLA, comentarios y resolución.",
+      },
     ],
   }),
   component: TicketDetailPage,
@@ -24,7 +35,7 @@ function TicketDetailPage() {
   const { ticketId } = Route.useParams();
   const navigate = useNavigate();
   const { updateTicket, deleteTicket } = useTickets();
-  
+
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -88,7 +99,16 @@ function TicketDetailPage() {
       tecnico: ticket.tecnico ?? "",
     });
     setComentarios(ticket.comentarios ?? []);
-  }, [ticketId, ticket?.asunto, ticket?.descripcion, ticket?.categoria, ticket?.prioridad, ticket?.estado, ticket?.tecnico, ticket?.comentarios]);
+  }, [
+    ticketId,
+    ticket?.asunto,
+    ticket?.descripcion,
+    ticket?.categoria,
+    ticket?.prioridad,
+    ticket?.estado,
+    ticket?.tecnico,
+    ticket?.comentarios,
+  ]);
 
   if (loading) {
     return (
@@ -180,7 +200,10 @@ function TicketDetailPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-6xl mx-auto px-6 py-12">
-        <Link to="/tickets" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">
+        <Link
+          to="/tickets"
+          className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        >
           ← Mis tickets
         </Link>
 
@@ -196,13 +219,19 @@ function TicketDetailPage() {
                 className="text-3xl font-extrabold tracking-tight text-balance w-full bg-transparent border-b border-border focus:outline-none focus:border-foreground"
               />
             ) : (
-              <h1 className="text-3xl font-extrabold tracking-tight text-balance">{ticket.asunto}</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight text-balance">
+                {ticket.asunto}
+              </h1>
             )}
             <div className="flex flex-wrap gap-2 mt-4">
-              <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${statusBadge[ticket.estado]}`}>
+              <span
+                className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${statusBadge[ticket.estado]}`}
+              >
                 {ticket.estado}
               </span>
-              <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${priorityBadge[ticket.prioridad]}`}>
+              <span
+                className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${priorityBadge[ticket.prioridad]}`}
+              >
                 IA: {ticket.prioridad}
               </span>
               <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider border border-border rounded-sm text-muted-foreground">
@@ -255,8 +284,13 @@ function TicketDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <section className="border border-border bg-card rounded-sm p-6 relative animate-reveal" style={{ animationDelay: "100ms" }}>
-              <div className={`absolute left-0 top-0 bottom-0 w-1 ${priorityColor[ticket.prioridad]}`} />
+            <section
+              className="border border-border bg-card rounded-sm p-6 relative animate-reveal"
+              style={{ animationDelay: "100ms" }}
+            >
+              <div
+                className={`absolute left-0 top-0 bottom-0 w-1 ${priorityColor[ticket.prioridad]}`}
+              />
               <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
                 Descripción
               </h2>
@@ -272,30 +306,53 @@ function TicketDetailPage() {
               )}
             </section>
 
-            <section className="border border-border bg-card rounded-sm p-6 animate-reveal" style={{ animationDelay: "150ms" }}>
+            <section
+              className="border border-border bg-card rounded-sm p-6 animate-reveal"
+              style={{ animationDelay: "150ms" }}
+            >
               <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-6">
                 Línea de tiempo
               </h2>
               <ol className="relative border-l border-border pl-6 space-y-6">
-                <TimelineItem t={ticket.creadoEn} title="Ticket creado" body={`Reportado por ${ticket.cliente}.`} />
+                <TimelineItem
+                  t={ticket.creadoEn}
+                  title="Ticket creado"
+                  body={`Reportado por ${ticket.cliente}.`}
+                />
                 <TimelineItem
                   t={ticket.creadoEn}
                   title="Clasificación IA"
                   body={`Prioridad ${ticket.prioridad} · Categoría ${ticket.categoria}.`}
                 />
                 {ticket.tecnico && (
-                  <TimelineItem t={ticket.creadoEn} title="Asignado" body={`Atendido por ${ticket.tecnico}.`} />
+                  <TimelineItem
+                    t={ticket.creadoEn}
+                    title="Asignado"
+                    body={`Atendido por ${ticket.tecnico}.`}
+                  />
                 )}
                 {comentarios.map((c, i) => (
-                  <TimelineItem key={i} t={`Hoy ${c.fecha}`} title={`Comentario · ${c.autor}`} body={c.texto} />
+                  <TimelineItem
+                    key={i}
+                    t={`Hoy ${c.fecha}`}
+                    title={`Comentario · ${c.autor}`}
+                    body={c.texto}
+                  />
                 ))}
                 {(ticket.estado === "Resuelto" || ticket.estado === "Cerrado") && (
-                  <TimelineItem t="Actualizado" title={`Marcado como ${ticket.estado}`} body="Ciclo de atención cerrado." />
+                  <TimelineItem
+                    t="Actualizado"
+                    title={`Marcado como ${ticket.estado}`}
+                    body="Ciclo de atención cerrado."
+                  />
                 )}
               </ol>
             </section>
 
-            <section className="border border-border bg-card rounded-sm p-6 animate-reveal" style={{ animationDelay: "200ms" }}>
+            <section
+              className="border border-border bg-card rounded-sm p-6 animate-reveal"
+              style={{ animationDelay: "200ms" }}
+            >
               <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
                 Agregar comentario
               </h2>
@@ -409,7 +466,9 @@ function TimelineItem({ t, title, body }: { t: string; title: string; body: stri
   return (
     <li className="relative">
       <span className="absolute -left-[31px] top-1 size-2.5 rounded-full bg-primary ring-4 ring-background" />
-      <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">{t}</div>
+      <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
+        {t}
+      </div>
       <div className="font-semibold text-sm mt-0.5">{title}</div>
       <div className="text-sm text-muted-foreground">{body}</div>
     </li>
@@ -419,7 +478,9 @@ function TimelineItem({ t, title, body }: { t: string; title: string; body: stri
 function DetailItem({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border-b border-border pb-4">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
       <div className="text-sm font-medium mt-1">{value}</div>
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>

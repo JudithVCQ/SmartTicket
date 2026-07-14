@@ -8,7 +8,10 @@ export const Route = createFileRoute("/tickets/new")({
   head: () => ({
     meta: [
       { title: "Registrar incidencia — SmartTicket" },
-      { name: "description", content: "Crea un nuevo ticket de soporte. La IA clasificará la prioridad automáticamente." },
+      {
+        name: "description",
+        content: "Crea un nuevo ticket de soporte. La IA clasificará la prioridad automáticamente.",
+      },
     ],
   }),
   component: NewTicketPage,
@@ -49,11 +52,18 @@ function NewTicketPage() {
 
       const ticket = await res.json();
       toast.success(`Ticket creado — IA: ${ticket.priority}`);
-      
+
       // Update local storage so it shows up in UI immediately if needed
       // (though a real app would refetch the list from backend)
-      createTicket({ asunto, descripcion, categoria: ticket.category, cliente, canal, detalle: descripcion });
-      
+      createTicket({
+        asunto,
+        descripcion,
+        categoria: ticket.category,
+        cliente,
+        canal,
+        detalle: descripcion,
+      });
+
       navigate({ to: "/tickets/$ticketId", params: { ticketId: ticket.id.toString() } });
     } catch (error) {
       toast.error("Ocurrió un error al procesar el ticket.");
@@ -66,7 +76,10 @@ function NewTicketPage() {
       <AppNav />
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-10 animate-reveal">
-          <Link to="/tickets" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">
+          <Link
+            to="/tickets"
+            className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
             ← Mis tickets
           </Link>
           <div className="mt-4 text-xs font-mono text-primary uppercase tracking-widest">
@@ -166,7 +179,8 @@ function NewTicketPage() {
             <div className="text-xs">
               <div className="font-bold uppercase tracking-widest">Análisis IA</div>
               <div className="text-zinc-400">
-                Al enviar, clasificaremos la prioridad y derivaremos al técnico correcto en segundos.
+                Al enviar, clasificaremos la prioridad y derivaremos al técnico correcto en
+                segundos.
               </div>
             </div>
           </div>

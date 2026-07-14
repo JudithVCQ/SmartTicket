@@ -19,7 +19,12 @@ export async function sendVerificationEmail(
   const port = Number(env?.SMTP_PORT ?? process.env.SMTP_PORT ?? "465");
   const user = env?.SMTP_USER ?? process.env.SMTP_USER;
   const pass = env?.SMTP_PASS ?? process.env.SMTP_PASS;
-  const from = env?.EMAIL_FROM ?? process.env.EMAIL_FROM ?? env?.SMTP_USER ?? process.env.SMTP_USER ?? "no-reply@smartticket.app";
+  const from =
+    env?.EMAIL_FROM ??
+    process.env.EMAIL_FROM ??
+    env?.SMTP_USER ??
+    process.env.SMTP_USER ??
+    "no-reply@smartticket.app";
 
   const verifyUrl = `${origin}/api/auth/verify?token=${encodeURIComponent(token)}`;
   const html = `
@@ -33,7 +38,10 @@ export async function sendVerificationEmail(
   `;
 
   if (!user || !pass) {
-    console.warn("SMTP credentials are not configured. Verification email content:", { verifyUrl, recipient });
+    console.warn("SMTP credentials are not configured. Verification email content:", {
+      verifyUrl,
+      recipient,
+    });
     return;
   }
 

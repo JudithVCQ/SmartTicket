@@ -106,8 +106,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Lovable App" },
       { name: "twitter:description", content: "Web Screen Studio creates web interface screens." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75ce80e6-1556-4294-ac1b-cb786d5d73e9/id-preview-702c7986--57a52f05-363a-4d3c-80f9-ae1161fbc4a1.lovable.app-1778647102311.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75ce80e6-1556-4294-ac1b-cb786d5d73e9/id-preview-702c7986--57a52f05-363a-4d3c-80f9-ae1161fbc4a1.lovable.app-1778647102311.png" },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75ce80e6-1556-4294-ac1b-cb786d5d73e9/id-preview-702c7986--57a52f05-363a-4d3c-80f9-ae1161fbc4a1.lovable.app-1778647102311.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75ce80e6-1556-4294-ac1b-cb786d5d73e9/id-preview-702c7986--57a52f05-363a-4d3c-80f9-ae1161fbc4a1.lovable.app-1778647102311.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

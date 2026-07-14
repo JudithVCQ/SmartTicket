@@ -84,7 +84,10 @@ export function Field({
 
 export function PrimaryButton({ children }: { children: ReactNode }) {
   return (
-    <button type="submit" className="w-full h-10 bg-foreground text-background text-sm font-semibold rounded-sm hover:bg-foreground/90 transition-colors">
+    <button
+      type="submit"
+      className="w-full h-10 bg-foreground text-background text-sm font-semibold rounded-sm hover:bg-foreground/90 transition-colors"
+    >
       {children}
     </button>
   );

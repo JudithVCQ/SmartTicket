@@ -10,7 +10,10 @@ export const Route = createFileRoute("/tickets/")({
   head: () => ({
     meta: [
       { title: "Mis tickets — SmartTicket" },
-      { name: "description", content: "Historial completo de tus tickets de soporte con estado y prioridad." },
+      {
+        name: "description",
+        content: "Historial completo de tus tickets de soporte con estado y prioridad.",
+      },
     ],
   }),
   component: TicketsListPage,
@@ -39,7 +42,8 @@ function TicketsListPage() {
   }, [personalTickets, filtro, query]);
 
   const handleDelete = (id: string, asunto: string) => {
-    if (!window.confirm(`¿Eliminar el ticket "${asunto}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar el ticket "${asunto}"? Esta acción no se puede deshacer.`))
+      return;
     deleteTicket(id);
     toast.success(`Ticket ${id} eliminado.`);
   };
@@ -91,11 +95,17 @@ function TicketsListPage() {
           </div>
         </div>
 
-        <div className="border border-border rounded-sm overflow-hidden bg-card animate-reveal" style={{ animationDelay: "100ms" }}>
+        <div
+          className="border border-border rounded-sm overflow-hidden bg-card animate-reveal"
+          style={{ animationDelay: "100ms" }}
+        >
           {lista.length === 0 ? (
             <div className="p-16 text-center">
               <div className="text-sm text-muted-foreground">No hay tickets que coincidan.</div>
-              <Link to="/tickets/new" className="mt-4 inline-block text-xs font-mono uppercase tracking-widest text-primary">
+              <Link
+                to="/tickets/new"
+                className="mt-4 inline-block text-xs font-mono uppercase tracking-widest text-primary"
+              >
                 Crear nueva incidencia →
               </Link>
             </div>

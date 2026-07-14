@@ -2,7 +2,7 @@ name: QA Pipeline DevSecOps
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, develop, ci/stabilization ]
   pull_request:
     branches: [ main, master ]
 

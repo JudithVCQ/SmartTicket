@@ -8,7 +8,10 @@ export const Route = createFileRoute("/tecnico")({
   head: () => ({
     meta: [
       { title: "Panel técnico — SmartTicket" },
-      { name: "description", content: "Cola de atención inteligente con SLA, prioridad IA y métricas operativas." },
+      {
+        name: "description",
+        content: "Cola de atención inteligente con SLA, prioridad IA y métricas operativas.",
+      },
     ],
   }),
   component: TecnicoPage,
@@ -46,8 +49,18 @@ function TecnicoPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           <KpiCard label="Cumplimiento SLA" value="—" trend="Pendiente de medición" delay={50} />
-          <KpiCard label="Tickets activos" value={String(cola.length)} trend={`${altas} con prioridad alta`} delay={100} />
-          <KpiCard label="MTTR (horas)" value="—" trend="Se calculará al usar el flujo" delay={150} />
+          <KpiCard
+            label="Tickets activos"
+            value={String(cola.length)}
+            trend={`${altas} con prioridad alta`}
+            delay={100}
+          />
+          <KpiCard
+            label="MTTR (horas)"
+            value="—"
+            trend="Se calculará al usar el flujo"
+            delay={150}
+          />
           <KpiCard label="Puntaje CSAT" value="—" trend="Sin valoraciones aún" delay={200} />
         </div>
 
@@ -70,7 +83,8 @@ function TecnicoPage() {
               <div className="border border-dashed border-border rounded-sm bg-card p-10 text-center">
                 <div className="text-sm font-medium">Tu operación está lista para comenzar.</div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Cuando registres una incidencia, el sistema simulará la priorización IA y la cola operativa aquí.
+                  Cuando registres una incidencia, el sistema simulará la priorización IA y la cola
+                  operativa aquí.
                 </p>
               </div>
             ) : (
@@ -85,7 +99,8 @@ function TecnicoPage() {
                 <h3 className="font-bold text-sm">Análisis IA Activo</h3>
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                El sistema evaluará cada incidencia nueva con reglas simuladas de urgencia, impacto y tiempo de respuesta.
+                El sistema evaluará cada incidencia nueva con reglas simuladas de urgencia, impacto
+                y tiempo de respuesta.
               </p>
             </div>
           </aside>

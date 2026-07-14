@@ -15,7 +15,7 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
-      (m) => ((m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry)),
+      (m) => (m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry),
     );
   }
   return serverEntryPromise;
@@ -99,7 +99,10 @@ async function handleAuthApi(request: Request, env: unknown) {
   }
 
   if (pathname === "/api/auth/forgot-password" && request.method === "POST") {
-    return jsonResponse({ message: "Si existe el correo, recibirás un enlace próximamente. Revisa Gmail para continuar." });
+    return jsonResponse({
+      message:
+        "Si existe el correo, recibirás un enlace próximamente. Revisa Gmail para continuar.",
+    });
   }
 
   return null;
@@ -155,11 +158,16 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 
 function calculateSla(priority: string) {
   switch (priority) {
-    case "Crítica": return "01:00:00";
-    case "Alta": return "04:00:00";
-    case "Media": return "08:00:00";
-    case "Baja": return "24:00:00";
-    default: return "24:00:00";
+    case "Crítica":
+      return "01:00:00";
+    case "Alta":
+      return "04:00:00";
+    case "Media":
+      return "08:00:00";
+    case "Baja":
+      return "24:00:00";
+    default:
+      return "24:00:00";
   }
 }
 
@@ -200,7 +208,7 @@ async function handleTicketsApi(request: Request, env: unknown) {
         appEnv,
         `INSERT INTO tickets (organization_id, subject, description, client, category, priority, status, sla)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [organizationId, asunto, descripcion, cliente, categoria, prioridad, estado, sla]
+        [organizationId, asunto, descripcion, cliente, categoria, prioridad, estado, sla],
       );
 
       return jsonResponse(result.rows[0], 201);
