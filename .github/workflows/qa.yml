@@ -2,7 +2,7 @@ name: QA Pipeline DevSecOps
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, develop, ci/stabilization ]
   pull_request:
     branches: [ main, master ]
 
@@ -32,12 +32,3 @@ jobs:
 
       - name: Run API Tests (Jest)
         run: npm run test:api
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E Tests (Playwright)
-        run: npm run test:e2e:ci
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}

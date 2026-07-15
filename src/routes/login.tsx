@@ -8,7 +8,10 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Iniciar sesión — SmartTicket" },
-      { name: "description", content: "Accede a tu panel de SmartTicket para gestionar tickets de soporte." },
+      {
+        name: "description",
+        content: "Accede a tu panel de SmartTicket para gestionar tickets de soporte.",
+      },
     ],
   }),
   component: LoginPage,
@@ -86,7 +89,10 @@ function LoginPage() {
           required
         />
         <div className="flex justify-end mb-6 -mt-2">
-          <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground">
+          <Link
+            to="/forgot-password"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
             ¿Olvidaste tu contraseña?
           </Link>
         </div>

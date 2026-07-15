@@ -7,7 +7,10 @@ export const Route = createFileRoute("/register")({
   head: () => ({
     meta: [
       { title: "Crear cuenta — SmartTicket" },
-      { name: "description", content: "Registra tu MYPE en SmartTicket y empieza a gestionar tu soporte hoy." },
+      {
+        name: "description",
+        content: "Registra tu MYPE en SmartTicket y empieza a gestionar tu soporte hoy.",
+      },
     ],
   }),
   component: RegisterPage,

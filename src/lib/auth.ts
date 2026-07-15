@@ -11,11 +11,13 @@ const TOKEN_LIFETIME_MINUTES = 60 * 24;
 const SESSION_DAYS = 7;
 
 function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "organizacion";
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "organizacion"
+  );
 }
 
 function getJwtSecret(env?: AuthEnv) {
@@ -45,7 +47,10 @@ function getAuthenticatedUser(request: Request, env?: AuthEnv) {
   if (!token) return null;
 
   try {
-    const payload = jwt.verify(token, getJwtSecret(env)) as unknown as { sub: number; email: string };
+    const payload = jwt.verify(token, getJwtSecret(env)) as unknown as {
+      sub: number;
+      email: string;
+    };
     return { id: payload.sub, email: payload.email };
   } catch {
     return null;
@@ -85,7 +90,9 @@ export async function registerUser(
   await ensureSchema(env as AppEnv);
 
   const normalizedEmail = payload.email.trim().toLowerCase();
-  const exists = await query(env as AppEnv, "SELECT id FROM users WHERE email = $1", [normalizedEmail]);
+  const exists = await query(env as AppEnv, "SELECT id FROM users WHERE email = $1", [
+    normalizedEmail,
+  ]);
   if ((exists.rowCount ?? 0) > 0) {
     return { status: 409, body: { message: "Ya existe un usuario con ese correo." } };
   }
@@ -101,10 +108,24 @@ export async function registerUser(
     env as AppEnv,
     `INSERT INTO users (email, password_hash, full_name, company, organization_id, role, verification_token, verification_token_expires)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [normalizedEmail, passwordHash, payload.fullName ?? null, companyName, organization.id, role, token, expiresAt],
+    [
+      normalizedEmail,
+      passwordHash,
+      payload.fullName ?? null,
+      companyName,
+      organization.id,
+      role,
+      token,
+      expiresAt,
+    ],
   );
 
-  await sendVerificationEmail(normalizedEmail, token, origin ?? "http://localhost:8080", env as MailEnv);
+  await sendVerificationEmail(
+    normalizedEmail,
+    token,
+    origin ?? "http://localhost:8080",
+    env as MailEnv,
+  );
 
   return {
     status: 201,
@@ -136,15 +157,16 @@ export async function verifyUser(token: string, env?: AuthEnv) {
     return { ok: false, message: "El enlace de verificación ya expiró." };
   }
 
-  await query(env as AppEnv, "UPDATE users SET is_verified = true, verification_token = NULL, verification_token_expires = NULL WHERE id = $1", [record.id]);
+  await query(
+    env as AppEnv,
+    "UPDATE users SET is_verified = true, verification_token = NULL, verification_token_expires = NULL WHERE id = $1",
+    [record.id],
+  );
 
   return { ok: true, message: "Correo verificado correctamente. Ya puedes iniciar sesión." };
 }
 
-export async function loginUser(
-  payload: { email: string; password: string },
-  env?: AuthEnv,
-) {
+export async function loginUser(payload: { email: string; password: string }, env?: AuthEnv) {
   await ensureSchema(env as AppEnv);
 
   const normalizedEmail = payload.email.trim().toLowerCase();

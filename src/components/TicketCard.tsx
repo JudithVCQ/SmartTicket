@@ -25,7 +25,9 @@ export function TicketCard({ ticket, delay = 0 }: { ticket: Ticket; delay?: numb
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase font-mono text-muted-foreground">SLA restante</span>
+            <span className="text-[10px] uppercase font-mono text-muted-foreground">
+              SLA restante
+            </span>
             <span
               className={`text-sm font-mono font-medium ${ticket.slaProgress > 0.7 ? "text-destructive" : "text-foreground"}`}
             >

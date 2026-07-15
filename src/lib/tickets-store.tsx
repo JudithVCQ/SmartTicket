@@ -1,10 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import {
-  tickets as seedTickets,
-  type Priority,
-  type Status,
-  type Ticket,
-} from "@/lib/mock-data";
+import { tickets as seedTickets, type Priority, type Status, type Ticket } from "@/lib/mock-data";
 import { getAuthSession } from "@/lib/auth-session";
 
 const STORAGE_KEY = "smartticket.tickets.v1";
@@ -30,9 +25,27 @@ interface TicketsContextValue {
 
 const TicketsContext = createContext<TicketsContextValue | null>(null);
 
-const URGENT_WORDS = ["caído", "caido", "no funciona", "urgente", "crítico", "critico", "sunat", "facturación", "facturacion", "no puedo"];
+const URGENT_WORDS = [
+  "caído",
+  "caido",
+  "no funciona",
+  "urgente",
+  "crítico",
+  "critico",
+  "sunat",
+  "facturación",
+  "facturacion",
+  "no puedo",
+];
 const HIGH_WORDS = ["error", "falla", "pérdida", "perdida", "lento", "intermitente"];
-const LOW_WORDS = ["consulta", "capacitación", "capacitacion", "duda", "información", "informacion"];
+const LOW_WORDS = [
+  "consulta",
+  "capacitación",
+  "capacitacion",
+  "duda",
+  "información",
+  "informacion",
+];
 
 function classifyPriority(text: string): Priority {
   const t = text.toLowerCase();
@@ -44,10 +57,14 @@ function classifyPriority(text: string): Priority {
 
 function slaForPriority(p: Priority): { restante: string; progress: number } {
   switch (p) {
-    case "Crítica": return { restante: "01:00:00", progress: 0.2 };
-    case "Alta": return { restante: "04:00:00", progress: 0.15 };
-    case "Media": return { restante: "08:00:00", progress: 0.1 };
-    case "Baja": return { restante: "24:00:00", progress: 0.05 };
+    case "Crítica":
+      return { restante: "01:00:00", progress: 0.2 };
+    case "Alta":
+      return { restante: "04:00:00", progress: 0.15 };
+    case "Media":
+      return { restante: "08:00:00", progress: 0.1 };
+    case "Baja":
+      return { restante: "24:00:00", progress: 0.05 };
   }
 }
 
@@ -76,11 +93,13 @@ function getCurrentUserIdentity(auth = getAuthSession()) {
 }
 
 function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "default";
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "default"
+  );
 }
 
 function getOrgScopeKey() {
@@ -116,26 +135,226 @@ function seedDemoTickets(scopeKey: string) {
   ];
 
   const ticketTemplates = [
-    { asunto: "Factura electrónica no responde", cliente: "María Quispe", categoria: "Facturación", prioridad: "Crítica" as Priority, estado: "En progreso" as Status, slaRestante: "01:00:00", slaProgress: 0.2, tecnico: "Ana Paredes", descripcion: "El módulo de facturación quedó sin responder al validar comprobantes." },
-    { asunto: "Acceso a CRM intermitente", cliente: "Luis Cárdenas", categoria: "Software", prioridad: "Alta" as Priority, estado: "Abierto" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Bruno Castro", descripcion: "La vista de clientes no carga desde la red WiFi del piso 2." },
-    { asunto: "Solicitud de capacitación para nuevos usuarios", cliente: "Javier Salas", categoria: "Capacitación", prioridad: "Baja" as Priority, estado: "Abierto" as Status, slaRestante: "24:00:00", slaProgress: 0.05, tecnico: "Carla Rojas", descripcion: "Se solicita una sesión guiada para 3 nuevos contratistas." },
-    { asunto: "Router del piso 2 con caída recurrente", cliente: "Sofía Torres", categoria: "Redes", prioridad: "Crítica" as Priority, estado: "En progreso" as Status, slaRestante: "01:00:00", slaProgress: 0.2, tecnico: "Bruno Castro", descripcion: "La red cae cada 20 minutos y afecta varios equipos." },
-    { asunto: "Solicitud de reemplazo de teclado", cliente: "Ruben Díaz", categoria: "Hardware", prioridad: "Media" as Priority, estado: "En espera" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Bruno Castro", descripcion: "Un teclado de atención tiene teclas sin responder." },
-    { asunto: "CRM presenta fallas al buscar clientes", cliente: "Luis Cárdenas", categoria: "Software", prioridad: "Alta" as Priority, estado: "Abierto" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Carla Rojas", descripcion: "La búsqueda de clientes no devuelve resultados desde la red interna." },
-    { asunto: "Inventario no sincroniza con tienda", cliente: "Javier Salas", categoria: "Inventario", prioridad: "Alta" as Priority, estado: "Abierto" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Carla Rojas", descripcion: "La tienda física no refleja los movimientos de stock del sistema." },
-    { asunto: "Correo corporativo con retrasos", cliente: "Elena Ríos", categoria: "Redes", prioridad: "Media" as Priority, estado: "En progreso" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Carla Rojas", descripcion: "Los correos salen con 5 a 10 minutos de demora." },
-    { asunto: "Consulta de permisos para usuarios temporales", cliente: "Diego Paredes", categoria: "Software", prioridad: "Baja" as Priority, estado: "Abierto" as Status, slaRestante: "24:00:00", slaProgress: 0.05, tecnico: "Ana Paredes", descripcion: "Se necesita asignar permisos para contratistas temporales." },
-    { asunto: "No cargan reportes mensuales", cliente: "Patricia Vega", categoria: "Software", prioridad: "Alta" as Priority, estado: "Abierto" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Ana Paredes", descripcion: "El cierre mensual no puede abrirse desde el portal." },
-    { asunto: "Pantalla de cobros se congela", cliente: "Renzo Morales", categoria: "Hardware", prioridad: "Media" as Priority, estado: "En espera" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Ana Paredes", descripcion: "La pantalla de cobros se congela al validar una venta." },
-    { asunto: "Incidencia con impresora térmica", cliente: "Nora Flores", categoria: "Hardware", prioridad: "Media" as Priority, estado: "Abierto" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Bruno Castro", descripcion: "La impresora térmica no imprime tickets de atención." },
-    { asunto: "VPN no conecta desde casa", cliente: "Marco Ponce", categoria: "Redes", prioridad: "Alta" as Priority, estado: "En progreso" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Bruno Castro", descripcion: "El equipo remoto no logra conectarse a la VPN corporativa." },
-    { asunto: "Error al subir documentos", cliente: "Katherine Lora", categoria: "Software", prioridad: "Media" as Priority, estado: "Abierto" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Carla Rojas", descripcion: "Al adjuntar archivos PDF aparecen errores de carga." },
-    { asunto: "Consulta de inventario por bodega", cliente: "Omar Suárez", categoria: "Inventario", prioridad: "Baja" as Priority, estado: "Abierto" as Status, slaRestante: "24:00:00", slaProgress: 0.05, tecnico: "Carla Rojas", descripcion: "El equipo de bodega necesita ver el stock real del almacén." },
-    { asunto: "Correo de ventas llega tarde", cliente: "Cecilia Tello", categoria: "Redes", prioridad: "Media" as Priority, estado: "En espera" as Status, slaRestante: "08:00:00", slaProgress: 0.1, tecnico: "Ana Paredes", descripcion: "Los mensajes de ventas presentan retrasos de varios minutos." },
-    { asunto: "Problema con sincronización de caja", cliente: "Eduardo Paredes", categoria: "Software", prioridad: "Alta" as Priority, estado: "Abierto" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Bruno Castro", descripcion: "La caja registra ventas pero no sincroniza el pedido." },
-    { asunto: "Se solicita actualización de permisos", cliente: "Fabiola Jiménez", categoria: "Software", prioridad: "Baja" as Priority, estado: "Abierto" as Status, slaRestante: "24:00:00", slaProgress: 0.05, tecnico: "Carla Rojas", descripcion: "Un usuario nuevo necesita acceso al módulo de compras." },
-    { asunto: "Monitor de punto de venta con brillo bajo", cliente: "Germán Castañeda", categoria: "Hardware", prioridad: "Baja" as Priority, estado: "Resuelto" as Status, slaRestante: "—", slaProgress: 1, tecnico: "Ana Paredes", descripcion: "El monitor de caja presenta brillo muy bajo." },
-    { asunto: "Lento el sistema al emitir boletas", cliente: "Silvia Rojas", categoria: "Software", prioridad: "Alta" as Priority, estado: "En progreso" as Status, slaRestante: "04:00:00", slaProgress: 0.15, tecnico: "Bruno Castro", descripcion: "La emisión de boletas tarda más de lo normal." },
+    {
+      asunto: "Factura electrónica no responde",
+      cliente: "María Quispe",
+      categoria: "Facturación",
+      prioridad: "Crítica" as Priority,
+      estado: "En progreso" as Status,
+      slaRestante: "01:00:00",
+      slaProgress: 0.2,
+      tecnico: "Ana Paredes",
+      descripcion: "El módulo de facturación quedó sin responder al validar comprobantes.",
+    },
+    {
+      asunto: "Acceso a CRM intermitente",
+      cliente: "Luis Cárdenas",
+      categoria: "Software",
+      prioridad: "Alta" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Bruno Castro",
+      descripcion: "La vista de clientes no carga desde la red WiFi del piso 2.",
+    },
+    {
+      asunto: "Solicitud de capacitación para nuevos usuarios",
+      cliente: "Javier Salas",
+      categoria: "Capacitación",
+      prioridad: "Baja" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "24:00:00",
+      slaProgress: 0.05,
+      tecnico: "Carla Rojas",
+      descripcion: "Se solicita una sesión guiada para 3 nuevos contratistas.",
+    },
+    {
+      asunto: "Router del piso 2 con caída recurrente",
+      cliente: "Sofía Torres",
+      categoria: "Redes",
+      prioridad: "Crítica" as Priority,
+      estado: "En progreso" as Status,
+      slaRestante: "01:00:00",
+      slaProgress: 0.2,
+      tecnico: "Bruno Castro",
+      descripcion: "La red cae cada 20 minutos y afecta varios equipos.",
+    },
+    {
+      asunto: "Solicitud de reemplazo de teclado",
+      cliente: "Ruben Díaz",
+      categoria: "Hardware",
+      prioridad: "Media" as Priority,
+      estado: "En espera" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Bruno Castro",
+      descripcion: "Un teclado de atención tiene teclas sin responder.",
+    },
+    {
+      asunto: "CRM presenta fallas al buscar clientes",
+      cliente: "Luis Cárdenas",
+      categoria: "Software",
+      prioridad: "Alta" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Carla Rojas",
+      descripcion: "La búsqueda de clientes no devuelve resultados desde la red interna.",
+    },
+    {
+      asunto: "Inventario no sincroniza con tienda",
+      cliente: "Javier Salas",
+      categoria: "Inventario",
+      prioridad: "Alta" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Carla Rojas",
+      descripcion: "La tienda física no refleja los movimientos de stock del sistema.",
+    },
+    {
+      asunto: "Correo corporativo con retrasos",
+      cliente: "Elena Ríos",
+      categoria: "Redes",
+      prioridad: "Media" as Priority,
+      estado: "En progreso" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Carla Rojas",
+      descripcion: "Los correos salen con 5 a 10 minutos de demora.",
+    },
+    {
+      asunto: "Consulta de permisos para usuarios temporales",
+      cliente: "Diego Paredes",
+      categoria: "Software",
+      prioridad: "Baja" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "24:00:00",
+      slaProgress: 0.05,
+      tecnico: "Ana Paredes",
+      descripcion: "Se necesita asignar permisos para contratistas temporales.",
+    },
+    {
+      asunto: "No cargan reportes mensuales",
+      cliente: "Patricia Vega",
+      categoria: "Software",
+      prioridad: "Alta" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Ana Paredes",
+      descripcion: "El cierre mensual no puede abrirse desde el portal.",
+    },
+    {
+      asunto: "Pantalla de cobros se congela",
+      cliente: "Renzo Morales",
+      categoria: "Hardware",
+      prioridad: "Media" as Priority,
+      estado: "En espera" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Ana Paredes",
+      descripcion: "La pantalla de cobros se congela al validar una venta.",
+    },
+    {
+      asunto: "Incidencia con impresora térmica",
+      cliente: "Nora Flores",
+      categoria: "Hardware",
+      prioridad: "Media" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Bruno Castro",
+      descripcion: "La impresora térmica no imprime tickets de atención.",
+    },
+    {
+      asunto: "VPN no conecta desde casa",
+      cliente: "Marco Ponce",
+      categoria: "Redes",
+      prioridad: "Alta" as Priority,
+      estado: "En progreso" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Bruno Castro",
+      descripcion: "El equipo remoto no logra conectarse a la VPN corporativa.",
+    },
+    {
+      asunto: "Error al subir documentos",
+      cliente: "Katherine Lora",
+      categoria: "Software",
+      prioridad: "Media" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Carla Rojas",
+      descripcion: "Al adjuntar archivos PDF aparecen errores de carga.",
+    },
+    {
+      asunto: "Consulta de inventario por bodega",
+      cliente: "Omar Suárez",
+      categoria: "Inventario",
+      prioridad: "Baja" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "24:00:00",
+      slaProgress: 0.05,
+      tecnico: "Carla Rojas",
+      descripcion: "El equipo de bodega necesita ver el stock real del almacén.",
+    },
+    {
+      asunto: "Correo de ventas llega tarde",
+      cliente: "Cecilia Tello",
+      categoria: "Redes",
+      prioridad: "Media" as Priority,
+      estado: "En espera" as Status,
+      slaRestante: "08:00:00",
+      slaProgress: 0.1,
+      tecnico: "Ana Paredes",
+      descripcion: "Los mensajes de ventas presentan retrasos de varios minutos.",
+    },
+    {
+      asunto: "Problema con sincronización de caja",
+      cliente: "Eduardo Paredes",
+      categoria: "Software",
+      prioridad: "Alta" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Bruno Castro",
+      descripcion: "La caja registra ventas pero no sincroniza el pedido.",
+    },
+    {
+      asunto: "Se solicita actualización de permisos",
+      cliente: "Fabiola Jiménez",
+      categoria: "Software",
+      prioridad: "Baja" as Priority,
+      estado: "Abierto" as Status,
+      slaRestante: "24:00:00",
+      slaProgress: 0.05,
+      tecnico: "Carla Rojas",
+      descripcion: "Un usuario nuevo necesita acceso al módulo de compras.",
+    },
+    {
+      asunto: "Monitor de punto de venta con brillo bajo",
+      cliente: "Germán Castañeda",
+      categoria: "Hardware",
+      prioridad: "Baja" as Priority,
+      estado: "Resuelto" as Status,
+      slaRestante: "—",
+      slaProgress: 1,
+      tecnico: "Ana Paredes",
+      descripcion: "El monitor de caja presenta brillo muy bajo.",
+    },
+    {
+      asunto: "Lento el sistema al emitir boletas",
+      cliente: "Silvia Rojas",
+      categoria: "Software",
+      prioridad: "Alta" as Priority,
+      estado: "En progreso" as Status,
+      slaRestante: "04:00:00",
+      slaProgress: 0.15,
+      tecnico: "Bruno Castro",
+      descripcion: "La emisión de boletas tarda más de lo normal.",
+    },
   ];
 
   return demoUsers.flatMap((user, userIndex) =>
@@ -191,7 +410,11 @@ export function getUserRanking(tickets: Ticket[]) {
   return Object.entries(
     tickets.reduce<Record<string, { name: string; count: number; open: number }>>((acc, ticket) => {
       const key = ticket.creadorEmail || ticket.creadoPor || "Sin asignar";
-      const entry = acc[key] ?? { name: ticket.creadoPor || ticket.creadorEmail || "Sin asignar", count: 0, open: 0 };
+      const entry = acc[key] ?? {
+        name: ticket.creadoPor || ticket.creadorEmail || "Sin asignar",
+        count: 0,
+        open: 0,
+      };
       entry.count += 1;
       if (ticket.estado !== "Cerrado" && ticket.estado !== "Resuelto") entry.open += 1;
       acc[key] = entry;
@@ -213,7 +436,11 @@ export function TicketsProvider({ children }: { children: React.ReactNode }) {
     const stored = loadFromStorage(nextScopeKey);
     const auth = getAuthSession();
     const isCarlaDemoUser = normalize(auth?.email) === "carla@demoticket.com";
-    const carlaTicketsCount = (stored ?? []).filter((ticket) => normalize(ticket.creadorEmail) === "carla@demoticket.com" || normalize(ticket.creadoPor) === "carla rojas").length;
+    const carlaTicketsCount = (stored ?? []).filter(
+      (ticket) =>
+        normalize(ticket.creadorEmail) === "carla@demoticket.com" ||
+        normalize(ticket.creadoPor) === "carla rojas",
+    ).length;
 
     if (stored && (!isCarlaDemoUser || carlaTicketsCount >= 20)) {
       setTickets(stored);
@@ -232,17 +459,18 @@ export function TicketsProvider({ children }: { children: React.ReactNode }) {
     persist(tickets, scopeKey);
   }, [tickets, scopeKey]);
 
-  const getTicket = useCallback(
-    (id: string) => tickets.find((t) => t.id === id),
-    [tickets],
-  );
+  const getTicket = useCallback((id: string) => tickets.find((t) => t.id === id), [tickets]);
 
   const createTicket = useCallback(
     (draft: TicketDraft): Ticket => {
       const prioridad = classifyPriority(`${draft.asunto} ${draft.descripcion}`);
       const sla = slaForPriority(prioridad);
       const auth = getAuthSession();
-      const orgName = draft.empresa?.trim() || auth?.company?.trim() || auth?.email?.trim() || "Nueva organización";
+      const orgName =
+        draft.empresa?.trim() ||
+        auth?.company?.trim() ||
+        auth?.email?.trim() ||
+        "Nueva organización";
       const { email, fullName } = getCurrentUserIdentity(auth);
       const ticket: Ticket = {
         id: nextId(tickets),
@@ -313,6 +541,19 @@ export function useTickets() {
   return ctx;
 }
 
-export const STATUS_OPTIONS: Status[] = ["Abierto", "En progreso", "En espera", "Resuelto", "Cerrado"];
+export const STATUS_OPTIONS: Status[] = [
+  "Abierto",
+  "En progreso",
+  "En espera",
+  "Resuelto",
+  "Cerrado",
+];
 export const PRIORITY_OPTIONS: Priority[] = ["Crítica", "Alta", "Media", "Baja"];
-export const CATEGORY_OPTIONS = ["Facturación", "Redes", "Software", "Hardware", "Inventario", "Capacitación"];
+export const CATEGORY_OPTIONS = [
+  "Facturación",
+  "Redes",
+  "Software",
+  "Hardware",
+  "Inventario",
+  "Capacitación",
+];

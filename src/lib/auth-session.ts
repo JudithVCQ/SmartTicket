@@ -13,7 +13,13 @@ export interface AuthSession {
 
 export function setAuthSession(
   email?: string,
-  profile?: { fullName?: string | null; company?: string | null; organizationName?: string | null; organizationId?: number | null; role?: string | null },
+  profile?: {
+    fullName?: string | null;
+    company?: string | null;
+    organizationName?: string | null;
+    organizationId?: number | null;
+    role?: string | null;
+  },
   token?: string,
 ) {
   if (typeof window === "undefined") return;
