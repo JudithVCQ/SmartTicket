@@ -13,7 +13,7 @@ export function AppNav() {
 
   const handleLogout = () => {
     clearAuthSession();
-    navigate({ to: "/login" });
+    navigate({ to: "/login" }); 
   };
 
   return (

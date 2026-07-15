@@ -6,6 +6,7 @@ test.describe("Ticket Creation Flow", () => {
 
     // Login
     await page.goto("/login");
+    await page.waitForLoadState("networkidle"); // espera a que React termine de hidratar
     await page.fill('input[type="email"]', "ana@demoticket.com");
     await page.fill('input[type="password"]', "Demo123!");
     await page.click('button[type="submit"]');
@@ -15,7 +16,11 @@ test.describe("Ticket Creation Flow", () => {
     await page.waitForURL(/\/dashboard$/, { timeout: 30000 });
 
     // Nuevo ticket
-    await page.goto("/tickets/new");
+    // NOTA: no usar page.goto("/tickets/new") — el guard de auth en __root.tsx
+    // corre en SSR y localStorage no existe ahí, así que una navegación dura
+    // siempre redirige a /login. Se navega por la SPA con el link del nav.
+    await page.getByRole("link", { name: "Nueva incidencia" }).click();
+    await page.waitForURL(/\/tickets\/new$/, { timeout: 10000 });
     await page.fill(
       'input[placeholder*="facturación"]',
       "Sistema de facturación caído (Playwright Test)",
