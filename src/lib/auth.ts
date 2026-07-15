@@ -42,7 +42,7 @@ function getSessionToken(request: Request) {
   return cookieMatch?.[1]?.trim() ?? null;
 }
 
-function getAuthenticatedUser(request: Request, env?: AuthEnv) {
+export function getAuthenticatedUser(request: Request, env?: AuthEnv) {
   const token = getSessionToken(request);
   if (!token) return null;
 

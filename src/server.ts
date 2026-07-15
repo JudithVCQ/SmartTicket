@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { registerUser, loginUser, verifyUser, getProfile, updateProfile } from "./lib/auth";
+import { registerUser, loginUser, verifyUser, getProfile, updateProfile, getAuthenticatedUser } from "./lib/auth";
 import { query } from "./lib/db";
 import { categorizeTicketWithGemini } from "./lib/ai";
 
@@ -176,6 +176,68 @@ async function handleTicketsApi(request: Request, env: unknown) {
   const pathname = url.pathname;
   const appEnv = env as Record<string, string>;
 
+  // ── GET /api/tickets: Listar todos los tickets mapeados ──
+  if (pathname === "/api/tickets" && request.method === "GET") {
+    try {
+      const user = getAuthenticatedUser(request, appEnv);
+      let organizationId = 1;
+
+      if (user) {
+        const userRes = await query(appEnv, "SELECT organization_id FROM users WHERE id = $1", [
+          user.id,
+        ]);
+        if ((userRes.rowCount ?? 0) > 0) {
+          organizationId = userRes.rows[0].organization_id as number;
+        }
+      }
+
+      const result = await query(
+        appEnv,
+        `SELECT 
+          t.*, 
+          o.name as organization_name,
+          u.full_name as technician_name,
+          u.email as technician_email
+         FROM tickets t
+         LEFT JOIN organizations o ON o.id = t.organization_id
+         LEFT JOIN users u ON u.id = t.assigned_to
+         WHERE t.organization_id = $1
+         ORDER BY t.created_at DESC`,
+        [organizationId],
+      );
+
+      const mappedTickets = result.rows.map((row: any) => ({
+        id: row.id.toString(),
+        asunto: row.subject,
+        descripcion: row.description || "",
+        cliente: row.client || "",
+        empresa: row.organization_name || "",
+        categoria: row.category || "Software",
+        prioridad: row.priority,
+        estado: row.status,
+        slaRestante: row.sla || "24h",
+        slaProgress:
+          row.priority === "Crítica"
+            ? 0.2
+            : row.priority === "Alta"
+              ? 0.15
+              : row.priority === "Media"
+                ? 0.1
+                : 0.05,
+        creadoEn: new Date(row.created_at).toISOString().slice(0, 16).replace("T", " "),
+        tecnico: row.technician_name || undefined,
+        creadoPor: undefined,
+        creadorEmail: undefined,
+      }));
+
+      return jsonResponse(mappedTickets, 200);
+    } catch (error) {
+      console.error("Error listing tickets:", error);
+      return jsonResponse({ message: "Error al listar los tickets" }, 500);
+    }
+  }
+
+  // ── POST /api/tickets: Crear un ticket ──
   if (pathname === "/api/tickets" && request.method === "POST") {
     const payload = await request.json().catch(() => ({}));
     const { asunto, descripcion, cliente, canal } = payload;
@@ -200,7 +262,6 @@ async function handleTicketsApi(request: Request, env: unknown) {
     const sla = calculateSla(prioridad);
 
     try {
-      // Find default organization (id 1) since auth is not fully mocked here
       const orgResult = await query(appEnv, "SELECT id FROM organizations LIMIT 1");
       const organizationId = (orgResult.rowCount ?? 0) > 0 ? orgResult.rows[0].id : 1;
 
@@ -218,18 +279,98 @@ async function handleTicketsApi(request: Request, env: unknown) {
     }
   }
 
+  // ── GET, PATCH, DELETE /api/tickets/:id ──
   const match = pathname.match(/^\/api\/tickets\/(\d+)$/);
-  if (match && request.method === "GET") {
+  if (match) {
     const id = parseInt(match[1], 10);
-    try {
-      const result = await query(appEnv, "SELECT * FROM tickets WHERE id = $1", [id]);
-      if (result.rowCount === 0) {
-        return jsonResponse({ message: "Ticket no encontrado" }, 404);
+
+    if (request.method === "GET") {
+      try {
+        const result = await query(appEnv, "SELECT * FROM tickets WHERE id = $1", [id]);
+        if (result.rowCount === 0) {
+          return jsonResponse({ message: "Ticket no encontrado" }, 404);
+        }
+
+        const ticket = result.rows[0];
+
+        // ── Protección IDOR: Verificar que el ticket pertenezca a la organización del usuario ──
+        const user = getAuthenticatedUser(request, appEnv);
+        if (user) {
+          const userRes = await query(appEnv, "SELECT organization_id FROM users WHERE id = $1", [
+            user.id,
+          ]);
+          if ((userRes.rowCount ?? 0) > 0) {
+            const userOrgId = userRes.rows[0].organization_id;
+            if (ticket.organization_id !== userOrgId) {
+              return jsonResponse({ message: "No autorizado (Acceso prohibido)" }, 403);
+            }
+          }
+        }
+
+        return jsonResponse(ticket, 200);
+      } catch (error) {
+        console.error("Error fetching ticket:", error);
+        return jsonResponse({ message: "Error al obtener el ticket" }, 500);
       }
-      return jsonResponse(result.rows[0], 200);
-    } catch (error) {
-      console.error("Error fetching ticket:", error);
-      return jsonResponse({ message: "Error al obtener el ticket" }, 500);
+    }
+
+    if (request.method === "PATCH") {
+      try {
+        const payload = await request.json().catch(() => ({}));
+        const { estado, prioridad, tecnico } = payload;
+        const updates: string[] = [];
+        const values: any[] = [];
+        let idx = 1;
+
+        if (estado !== undefined) {
+          updates.push(`status = $${idx++}`);
+          values.push(estado);
+        }
+        if (prioridad !== undefined) {
+          updates.push(`priority = $${idx++}`);
+          values.push(prioridad);
+        }
+
+        if (tecnico !== undefined) {
+          if (tecnico === null || tecnico === "") {
+            updates.push(`assigned_to = NULL`);
+          } else {
+            const techRes = await query(
+              appEnv,
+              "SELECT id FROM users WHERE full_name = $1 LIMIT 1",
+              [tecnico],
+            );
+            if ((techRes.rowCount ?? 0) > 0) {
+              updates.push(`assigned_to = $${idx++}`);
+              values.push(techRes.rows[0].id);
+            }
+          }
+        }
+
+        if (updates.length > 0) {
+          values.push(id);
+          await query(
+            appEnv,
+            `UPDATE tickets SET ${updates.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
+            values,
+          );
+        }
+
+        return jsonResponse({ success: true }, 200);
+      } catch (error) {
+        console.error("Error updating ticket:", error);
+        return jsonResponse({ message: "Error al actualizar el ticket" }, 500);
+      }
+    }
+
+    if (request.method === "DELETE") {
+      try {
+        await query(appEnv, "DELETE FROM tickets WHERE id = $1", [id]);
+        return jsonResponse({ success: true }, 200);
+      } catch (error) {
+        console.error("Error deleting ticket:", error);
+        return jsonResponse({ message: "Error al eliminar el ticket" }, 500);
+      }
     }
   }
 
