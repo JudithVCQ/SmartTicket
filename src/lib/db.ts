@@ -37,6 +37,9 @@ function getPool(env: AppEnv) {
       ssl: {
         rejectUnauthorized: false,
       },
+      max: 2, // Limitar conexiones para evitar saturar el plan gratuito de Aiven
+      connectionTimeoutMillis: 5000, // Evitar que la petición se quede colgada para siempre
+      idleTimeoutMillis: 10000, // Liberar conexiones inactivas rápidamente
     });
   }
   return pool;
@@ -55,15 +58,20 @@ export async function query<T extends QueryResultRow = Record<string, unknown>>(
   }
 }
 
-async function resetAndRecreateSchema(env: AppEnv) {
-  await query(env, "DROP TABLE IF EXISTS tickets CASCADE");
-  await query(env, "DROP TABLE IF EXISTS users CASCADE");
-  await query(env, "DROP TABLE IF EXISTS organizations CASCADE");
+/** Cierra el pool de conexiones. Llamar en afterAll() de los tests que usan la BD real. */
+export async function closePool() {
+  if (pool) {
+    await pool.end();
+    pool = undefined;
+    schemaInitialized = false;
+  }
+}
 
+async function ensureTablesExist(env: AppEnv) {
   await query(
     env,
     `
-    CREATE TABLE organizations (
+    CREATE TABLE IF NOT EXISTS organizations (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
@@ -75,7 +83,7 @@ async function resetAndRecreateSchema(env: AppEnv) {
   await query(
     env,
     `
-    CREATE TABLE users (
+    CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
@@ -94,7 +102,7 @@ async function resetAndRecreateSchema(env: AppEnv) {
   await query(
     env,
     `
-    CREATE TABLE tickets (
+    CREATE TABLE IF NOT EXISTS tickets (
       id SERIAL PRIMARY KEY,
       organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
       assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -402,10 +410,25 @@ async function seedDemoWorkspace(env: AppEnv) {
   }
 }
 
+let schemaInitPromise: Promise<void> | undefined;
+
 export async function ensureSchema(env: AppEnv) {
   if (schemaInitialized) return;
 
-  await resetAndRecreateSchema(env);
-  await seedDemoWorkspace(env);
-  schemaInitialized = true;
+  if (!schemaInitPromise) {
+    schemaInitPromise = (async () => {
+      await ensureTablesExist(env);
+
+      const result = await query(env, "SELECT id FROM users WHERE email = $1 LIMIT 1", [
+        "ana@demoticket.com",
+      ]);
+      if ((result.rowCount ?? 0) === 0) {
+        await seedDemoWorkspace(env);
+      }
+
+      schemaInitialized = true;
+    })();
+  }
+
+  await schemaInitPromise;
 }

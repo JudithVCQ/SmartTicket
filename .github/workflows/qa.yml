@@ -10,6 +10,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: defaultdb
+          POSTGRES_USER: avnadmin
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -30,5 +45,9 @@ jobs:
         run: npm audit --audit-level=high
         continue-on-error: true
 
-      - name: Run API Tests (Jest)
-        run: npm run test:api
+      - name: Run API Tests (Jest) with Coverage
+        env:
+          DATABASE_URL: postgres://avnadmin:password@localhost:5432/defaultdb?sslmode=disable
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: npm run test:api -- --coverage --forceExit
