@@ -37,3 +37,4 @@ dist-ssr
 test-results/
 playwright-report/
 debug-*.png
+*.zip

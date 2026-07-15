@@ -11,17 +11,17 @@ test.describe("Ticket Creation Flow", () => {
     await page.click('button[type="submit"]');
 
     // Esperar a que la API responda y la ruta sea /dashboard
-    await page.waitForResponse(
-      (res) => res.url().includes("/api/auth/login"),
-      { timeout: 60000 },
-    );
+    await page.waitForResponse((res) => res.url().includes("/api/auth/login"), { timeout: 60000 });
     await page.waitForURL(/\/dashboard$/, { timeout: 30000 });
 
     // Nuevo ticket
     await page.goto("/tickets/new");
-    await page.fill('input[placeholder*="facturación"]', "Sistema de facturación caído (Playwright Test)");
+    await page.fill(
+      'input[placeholder*="facturación"]',
+      "Sistema de facturación caído (Playwright Test)",
+    );
     await page.fill('input[placeholder*="María"]', "Usuario Test");
-    await page.fill('textarea', "No se pueden generar comprobantes de pago desde la web.");
+    await page.fill("textarea", "No se pueden generar comprobantes de pago desde la web.");
     await page.click('button[type="submit"]');
 
     await page.waitForURL(/\/tickets\/.+/);
