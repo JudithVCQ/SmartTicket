@@ -18,8 +18,10 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  /* webServer se omite porque start-server-and-test se encarga de
-     levantar y esperar al servidor en el script test:e2e:ci.
-     Para ejecución local con 'npm run test:e2e', levanta el dev server
-     manualmente con 'npm run dev' en otra terminal. */
+  webServer: {
+    command: "npm run dev",
+    url: "http://localhost:8080",
+    reuseExistingServer: true,
+    timeout: 60000,
+  },
 });
