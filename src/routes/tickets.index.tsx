@@ -3,8 +3,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppNav } from "@/components/AppNav";
 import { statusBadge, priorityBadge, priorityColor, type Status } from "@/lib/mock-data";
-import { getAuthSession } from "@/lib/auth-session";
-import { getMyTickets, useTickets } from "@/lib/tickets-store";
+import { useTickets } from "@/lib/tickets-store";
 
 export const Route = createFileRoute("/tickets/")({
   head: () => ({
@@ -24,14 +23,11 @@ const filtros: Filtro[] = ["Todos", "Abierto", "En progreso", "En espera", "Resu
 
 function TicketsListPage() {
   const { tickets, deleteTicket } = useTickets();
-  const auth = getAuthSession();
   const [filtro, setFiltro] = useState<Filtro>("Todos");
   const [query, setQuery] = useState("");
 
-  const personalTickets = useMemo(() => getMyTickets(tickets, auth), [tickets, auth]);
-
   const lista = useMemo(() => {
-    return personalTickets.filter((t) => {
+    return tickets.filter((t) => {
       if (filtro !== "Todos" && t.estado !== filtro) return false;
       if (query) {
         const q = query.toLowerCase();
@@ -39,7 +35,7 @@ function TicketsListPage() {
       }
       return true;
     });
-  }, [personalTickets, filtro, query]);
+  }, [tickets, filtro, query]);
 
   const handleDelete = (id: string, asunto: string) => {
     if (!window.confirm(`¿Eliminar el ticket "${asunto}"? Esta acción no se puede deshacer.`))

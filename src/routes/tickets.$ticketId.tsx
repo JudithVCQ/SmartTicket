@@ -17,6 +17,7 @@ import {
   STATUS_OPTIONS,
   useTickets,
 } from "@/lib/tickets-store";
+import { getAuthSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/tickets/$ticketId")({
   head: ({ params }) => ({
@@ -40,7 +41,10 @@ function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/tickets/${ticketId}`)
+    const token = getAuthSession()?.token;
+    fetch(`/api/tickets/${ticketId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Not found");
         return res.json();
@@ -145,24 +149,28 @@ function TicketDetailPage() {
       toast.error("El asunto no puede estar vacío.");
       return;
     }
-    updateTicket(ticket.id, {
+    const patch = {
       asunto: form.asunto.trim(),
       descripcion: form.descripcion.trim(),
       categoria: form.categoria,
       prioridad: form.prioridad,
       estado: form.estado,
       tecnico: form.tecnico.trim() || undefined,
-    });
+    };
+    updateTicket(ticket.id, patch);
+    setTicket((prev) => (prev ? { ...prev, ...patch } : null));
     setEditing(false);
     toast.success("Cambios guardados.");
   };
 
   const handleQuickStatus = (estado: Status) => {
-    updateTicket(ticket.id, {
+    const patch = {
       estado,
       slaProgress: estado === "Resuelto" || estado === "Cerrado" ? 1 : ticket.slaProgress,
       slaRestante: estado === "Resuelto" || estado === "Cerrado" ? "—" : ticket.slaRestante,
-    });
+    };
+    updateTicket(ticket.id, patch);
+    setTicket((prev) => (prev ? { ...prev, ...patch } : null));
     toast.success(`Estado actualizado: ${estado}`);
   };
 

@@ -18,7 +18,7 @@ interface TicketsContextValue {
   tickets: Ticket[];
   getTicket: (id: string) => Ticket | undefined;
   createTicket: (draft: TicketDraft) => Ticket;
-  updateTicket: (id: string, patch: Partial<Ticket>) => Ticket | undefined;
+  updateTicket: (id: string, patch: Partial<Ticket>) => void;
   deleteTicket: (id: string) => void;
   resetTickets: () => void;
 }
@@ -426,38 +426,26 @@ export function getUserRanking(tickets: Ticket[]) {
 }
 
 export function TicketsProvider({ children }: { children: React.ReactNode }) {
-  const [tickets, setTickets] = useState<Ticket[]>(seedTickets);
-  const [scopeKey, setScopeKey] = useState<string>(STORAGE_KEY);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
 
-  useEffect(() => {
-    const nextScopeKey = getOrgScopeKey();
-    setScopeKey(nextScopeKey);
-
-    const stored = loadFromStorage(nextScopeKey);
-    const auth = getAuthSession();
-    const isCarlaDemoUser = normalize(auth?.email) === "carla@demoticket.com";
-    const carlaTicketsCount = (stored ?? []).filter(
-      (ticket) =>
-        normalize(ticket.creadorEmail) === "carla@demoticket.com" ||
-        normalize(ticket.creadoPor) === "carla rojas",
-    ).length;
-
-    if (stored && (!isCarlaDemoUser || carlaTicketsCount >= 20)) {
-      setTickets(stored);
-    } else {
-      const demoTickets = seedDemoTickets(nextScopeKey);
-      if (demoTickets) {
-        setTickets(demoTickets);
-        persist(demoTickets, nextScopeKey);
-      } else {
-        setTickets([]);
+  const loadTickets = useCallback(async () => {
+    try {
+      const token = getAuthSession()?.token;
+      const res = await fetch("/api/tickets", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTickets(Array.isArray(data) ? data : []);
       }
+    } catch (error) {
+      console.error("Error loading tickets from server:", error);
     }
   }, []);
 
   useEffect(() => {
-    persist(tickets, scopeKey);
-  }, [tickets, scopeKey]);
+    loadTickets();
+  }, [loadTickets]);
 
   const getTicket = useCallback((id: string) => tickets.find((t) => t.id === id), [tickets]);
 
@@ -499,33 +487,49 @@ export function TicketsProvider({ children }: { children: React.ReactNode }) {
         ],
       };
       setTickets((prev) => [ticket, ...prev]);
+      loadTickets();
       return ticket;
     },
-    [tickets],
+    [tickets, loadTickets],
   );
 
-  const updateTicket = useCallback((id: string, patch: Partial<Ticket>) => {
-    let updated: Ticket | undefined;
-    setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        updated = { ...t, ...patch };
-        return updated;
-      }),
-    );
-    return updated;
-  }, []);
+  const updateTicket = useCallback(
+    (id: string, patch: Partial<Ticket>) => {
+      fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estado: patch.estado,
+          prioridad: patch.prioridad,
+          tecnico: patch.tecnico,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) {
+            setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+            loadTickets();
+          }
+        })
+        .catch((error) => console.error("Error updating ticket:", error));
+    },
+    [loadTickets],
+  );
 
   const deleteTicket = useCallback((id: string) => {
-    setTickets((prev) => prev.filter((t) => t.id !== id));
+    fetch(`/api/tickets/${id}`, {
+      method: "DELETE",
+    })
+      .then((res) => {
+        if (res.ok) {
+          setTickets((prev) => prev.filter((t) => t.id !== id));
+        }
+      })
+      .catch((error) => console.error("Error deleting ticket:", error));
   }, []);
 
-  const resetTickets = useCallback(() => {
+  const resetTickets = useCallback(async () => {
     setTickets([]);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(scopeKey);
-    }
-  }, [scopeKey]);
+  }, []);
 
   const value = useMemo<TicketsContextValue>(
     () => ({ tickets, getTicket, createTicket, updateTicket, deleteTicket, resetTickets }),

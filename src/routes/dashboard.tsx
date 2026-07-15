@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { AppNav } from "@/components/AppNav";
 import { KpiCard } from "@/components/KpiCard";
-import { getAuthSession } from "@/lib/auth-session";
-import { getMyTickets, getUserRanking, useTickets } from "@/lib/tickets-store";
+import { useTickets } from "@/lib/tickets-store";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -20,38 +20,68 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardPage() {
   const { tickets } = useTickets();
-  const auth = getAuthSession();
-  const misTickets = getMyTickets(tickets, auth);
-  const activos = misTickets.filter(
-    (ticket) => ticket.estado !== "Cerrado" && ticket.estado !== "Resuelto",
+
+  const activos = useMemo(
+    () => tickets.filter((t) => t.estado !== "Cerrado" && t.estado !== "Resuelto"),
+    [tickets],
   );
-  const resueltos = misTickets.filter(
-    (ticket) => ticket.estado === "Resuelto" || ticket.estado === "Cerrado",
+  const resueltos = useMemo(
+    () => tickets.filter((t) => t.estado === "Resuelto" || t.estado === "Cerrado"),
+    [tickets],
   );
-  const prioridadAlta = activos.filter(
-    (ticket) => ticket.prioridad === "Crítica" || ticket.prioridad === "Alta",
-  ).length;
-  const ranking = getUserRanking(tickets).slice(0, 5);
-  const recientes = [...misTickets].sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
+  const prioridadAlta = useMemo(
+    () => activos.filter((t) => t.prioridad === "Crítica" || t.prioridad === "Alta").length,
+    [activos],
+  );
+
+  // Ranking: agrupar por técnico asignado
+  const ranking = useMemo(() => {
+    const map: Record<string, { name: string; count: number; open: number }> = {};
+    for (const t of tickets) {
+      const key = t.tecnico || "Sin asignar";
+      if (!map[key]) map[key] = { name: key, count: 0, open: 0 };
+      map[key].count += 1;
+      if (t.estado !== "Cerrado" && t.estado !== "Resuelto") map[key].open += 1;
+    }
+    return Object.values(map)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [tickets]);
+
+  // Últimos 5 tickets recientes
+  const recientes = useMemo(
+    () =>
+      [...tickets]
+        .sort((a, b) => {
+          const na = Number(a.id);
+          const nb = Number(b.id);
+          if (!isNaN(na) && !isNaN(nb)) return nb - na;
+          return b.id.localeCompare(a.id);
+        })
+        .slice(0, 5),
+    [tickets],
+  );
 
   const handleExportCsv = () => {
     const rows = [
-      ["id", "asunto", "cliente", "categoria", "prioridad", "estado", "creadoPor", "creadoEn"],
-      ...tickets.map((ticket) => [
-        ticket.id,
-        ticket.asunto,
-        ticket.cliente,
-        ticket.categoria,
-        ticket.prioridad,
-        ticket.estado,
-        ticket.creadoPor ?? "",
-        ticket.creadoEn,
+      ["ID", "Asunto", "Cliente", "Empresa", "Categoría", "Prioridad", "Estado", "SLA", "Técnico", "Creado"],
+      ...tickets.map((t) => [
+        t.id,
+        t.asunto,
+        t.cliente ?? "",
+        t.empresa ?? "",
+        t.categoria ?? "",
+        t.prioridad ?? "",
+        t.estado ?? "",
+        t.slaRestante ?? "",
+        t.tecnico ?? "",
+        t.creadoEn ?? "",
       ]),
     ];
     const csv = rows
-      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
       .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -78,11 +108,6 @@ function DashboardPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <select className="h-10 px-3 border border-border bg-background text-sm rounded-sm">
-              <option>Últimos 30 días</option>
-              <option>Últimos 7 días</option>
-              <option>Este trimestre</option>
-            </select>
             <button
               onClick={handleExportCsv}
               className="px-5 py-2.5 border border-border font-semibold text-sm rounded-sm hover:bg-muted transition-colors"
@@ -94,11 +119,9 @@ function DashboardPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           <KpiCard
-            label="Tus tickets"
-            value={String(misTickets.length)}
-            trend={
-              misTickets.length ? `${misTickets.length} creados por ti` : "Sin tickets personales"
-            }
+            label="Total tickets"
+            value={String(tickets.length)}
+            trend={tickets.length ? `${tickets.length} en tu organización` : "Sin tickets aún"}
             delay={50}
           />
           <KpiCard
@@ -112,15 +135,19 @@ function DashboardPage() {
             value={String(prioridadAlta)}
             trend={
               prioridadAlta
-                ? `${prioridadAlta} requieren seguimiento rápido`
+                ? `${prioridadAlta} requieren atención rápida`
                 : "Sin incidencias críticas"
             }
             delay={150}
           />
           <KpiCard
-            label="Organización"
-            value={String(tickets.length)}
-            trend={tickets.length ? "Tickets compartidos de tu empresa" : "Aún no hay tickets"}
+            label="Resueltos"
+            value={String(resueltos.length)}
+            trend={
+              tickets.length > 0
+                ? `${Math.round((resueltos.length / tickets.length) * 100)}% de resolución`
+                : "Sin datos"
+            }
             delay={200}
           />
         </div>
@@ -131,27 +158,27 @@ function DashboardPage() {
             style={{ animationDelay: "250ms" }}
           >
             <h2 className="font-bold uppercase tracking-wide text-xs text-muted-foreground mb-4">
-              Tus tickets personales
+              Tickets recientes de la organización
             </h2>
-            {misTickets.length === 0 ? (
-              <p className="text-sm text-muted-foreground max-w-2xl">
-                Aún no tienes tickets registrados. Cuando crees una incidencia, aparecerá aquí.
+            {recientes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay tickets registrados. Cuando crees una incidencia, aparecerá aquí.
               </p>
             ) : (
               <div className="space-y-3">
-                {recientes.map((ticket) => (
+                {recientes.map((t) => (
                   <div
-                    key={ticket.id}
+                    key={t.id}
                     className="flex flex-col gap-1 border-b border-border/70 pb-3 last:border-b-0 last:pb-0"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-semibold">{ticket.asunto}</div>
-                      <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                        {ticket.estado}
+                      <div className="font-semibold truncate max-w-xs">{t.asunto}</div>
+                      <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                        {t.estado}
                       </span>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {ticket.cliente} • {ticket.categoria} • {ticket.prioridad}
+                      {t.cliente} • {t.categoria} • {t.prioridad}
                     </div>
                   </div>
                 ))}
@@ -164,28 +191,32 @@ function DashboardPage() {
             style={{ animationDelay: "300ms" }}
           >
             <h2 className="font-bold uppercase tracking-wide text-xs text-muted-foreground mb-4">
-              Ranking de usuarios
+              Ranking por técnico
             </h2>
-            <div className="space-y-3">
-              {ranking.map((user, index) => (
-                <div
-                  key={user.key}
-                  className="flex items-center justify-between rounded-sm border border-border px-3 py-2"
-                >
-                  <div>
-                    <div className="font-semibold">
-                      #{index + 1} {user.name}
+            {ranking.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin técnicos asignados aún.</p>
+            ) : (
+              <div className="space-y-3">
+                {ranking.map((user, index) => (
+                  <div
+                    key={user.name}
+                    className="flex items-center justify-between rounded-sm border border-border px-3 py-2"
+                  >
+                    <div>
+                      <div className="font-semibold">
+                        #{index + 1} {user.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {user.count} tickets • {user.open} abiertos
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {user.count} tickets • {user.open} abiertos
-                    </div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                      {user.count}
+                    </span>
                   </div>
-                  <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                    {user.count}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </main>

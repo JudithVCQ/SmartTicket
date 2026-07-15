@@ -37,9 +37,9 @@ function getPool(env: AppEnv) {
       ssl: {
         rejectUnauthorized: false,
       },
-      max: 2, // Limitar conexiones para evitar saturar el plan gratuito de Aiven
-      connectionTimeoutMillis: 5000, // Evitar que la petición se quede colgada para siempre
-      idleTimeoutMillis: 10000, // Liberar conexiones inactivas rápidamente
+      max: 5, // Suficiente para ensureSchema + requests concurrentes sin saturar Aiven free tier
+      connectionTimeoutMillis: 15000, // Aiven puede tardar en la primera conexión SSL en frío
+      idleTimeoutMillis: 30000, // Liberar conexiones inactivas tras 30s
     });
   }
   return pool;
