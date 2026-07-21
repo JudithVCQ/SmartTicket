@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AppNav } from "@/components/AppNav";
 import { statusBadge, priorityBadge, priorityColor, type Status } from "@/lib/mock-data";
 import { useTickets } from "@/lib/tickets-store";
+import { isStaffSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/tickets/")({
   head: () => ({
@@ -23,6 +24,8 @@ const filtros: Filtro[] = ["Todos", "Abierto", "En progreso", "En espera", "Resu
 
 function TicketsListPage() {
   const { tickets, deleteTicket } = useTickets();
+  // Eliminar tickets es del equipo de soporte; el solicitante sólo consulta.
+  const staff = isStaffSession();
   const [filtro, setFiltro] = useState<Filtro>("Todos");
   const [query, setQuery] = useState("");
 
@@ -37,11 +40,15 @@ function TicketsListPage() {
     });
   }, [tickets, filtro, query]);
 
-  const handleDelete = (id: string, asunto: string) => {
+  const handleDelete = async (id: string, asunto: string) => {
     if (!window.confirm(`¿Eliminar el ticket "${asunto}"? Esta acción no se puede deshacer.`))
       return;
-    deleteTicket(id);
-    toast.success(`Ticket ${id} eliminado.`);
+    try {
+      await deleteTicket(id);
+      toast.success(`Ticket ${id} eliminado.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el ticket.");
+    }
   };
 
   return (
@@ -55,7 +62,9 @@ function TicketsListPage() {
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight">Mis tickets</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Trazabilidad completa: cada solicitud, su estado y SLA.
+              {staff
+                ? "Trazabilidad completa: cada solicitud, su estado y SLA."
+                : "Aquí puedes seguir el avance de todo lo que has reportado."}
             </p>
           </div>
           <Link
@@ -161,12 +170,14 @@ function TicketsListPage() {
                       >
                         Ver
                       </Link>
-                      <button
-                        onClick={() => handleDelete(t.id, t.asunto)}
-                        className="text-[11px] font-bold uppercase tracking-widest text-destructive hover:underline"
-                      >
-                        Eliminar
-                      </button>
+                      {staff && (
+                        <button
+                          onClick={() => handleDelete(t.id, t.asunto)}
+                          className="text-[11px] font-bold uppercase tracking-widest text-destructive hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

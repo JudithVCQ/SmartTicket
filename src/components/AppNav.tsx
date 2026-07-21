@@ -1,21 +1,24 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { clearAuthSession, isAuthenticated } from "@/lib/auth-session";
+import { clearAuthSession, isAuthenticated, isStaffSession } from "@/lib/auth-session";
 
 const links = [
-  { to: "/dashboard", label: "Inicio" },
-  { to: "/tickets", label: "Mis Tickets" },
-  { to: "/tecnico", label: "Operaciones" },
-  { to: "/equipo", label: "Equipo" },
-  { to: "/organizacion", label: "Organización" },
+  { to: "/dashboard", label: "Inicio", staffOnly: true },
+  { to: "/tickets", label: "Mis Tickets", staffOnly: false },
+  { to: "/tecnico", label: "Operaciones", staffOnly: true },
+  { to: "/equipo", label: "Equipo", staffOnly: true },
+  { to: "/organizacion", label: "Organización", staffOnly: true },
 ] as const;
 
 export function AppNav() {
   const navigate = useNavigate();
   const authenticated = isAuthenticated();
+  // Quien sólo reporta incidencias ve un menú reducido: crear y seguir lo suyo.
+  const staff = isStaffSession();
+  const visibles = links.filter((l) => staff || !l.staffOnly);
 
   const handleLogout = () => {
     clearAuthSession();
-    navigate({ to: "/login" }); 
+    navigate({ to: "/login" });
   };
 
   return (
@@ -26,7 +29,7 @@ export function AppNav() {
             SMART<span className="text-primary">TICKET</span>
           </Link>
           <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
-            {links.map((l) => (
+            {visibles.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
@@ -52,7 +55,20 @@ export function AppNav() {
                 to="/profile"
                 className="size-8 bg-muted border border-border rounded-sm flex items-center justify-center font-mono text-xs"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
               </Link>
               <button
                 onClick={handleLogout}

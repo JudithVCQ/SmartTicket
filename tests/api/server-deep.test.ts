@@ -10,7 +10,7 @@ jest.mock("../../src/lib/db", () => ({
 }));
 
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest
+  categorizeTicketWithAi: jest
     .fn<() => Promise<{ categoria: string; prioridad: string }>>()
     .mockResolvedValue({ categoria: "Software", prioridad: "Media" }),
 }));
@@ -50,17 +50,31 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
     // Query 2: SELECT tickets...
     mockQuery.mockResolvedValueOnce({
       rowCount: 1,
-      rows: [{
-        id: 55, subject: "Fallo de red", description: "Sin internet", client: "Ana",
-        category: "Redes", priority: "Alta", status: "Abierto", sla: "4h",
-        created_at: new Date().toISOString(), organization_name: "Org B", technician_name: null,
-      }],
+      rows: [
+        {
+          id: 55,
+          subject: "Fallo de red",
+          description: "Sin internet",
+          client: "Ana",
+          category: "Redes",
+          priority: "Alta",
+          status: "Abierto",
+          sla: "4h",
+          created_at: new Date().toISOString(),
+          organization_name: "Org B",
+          technician_name: null,
+        },
+      ],
     });
 
-    const response = await server.fetch(new Request("http://localhost/api/tickets", {
-      method: "GET",
-      headers: { Cookie: cookie },
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets", {
+        method: "GET",
+        headers: { Cookie: cookie },
+      }),
+      {},
+      {},
+    );
 
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -75,10 +89,14 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
     // Query 2: SELECT tickets con organizationId por defecto (1)
     mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
-    const response = await server.fetch(new Request("http://localhost/api/tickets", {
-      method: "GET",
-      headers: { Cookie: cookie },
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets", {
+        method: "GET",
+        headers: { Cookie: cookie },
+      }),
+      {},
+      {},
+    );
 
     expect(response.status).toBe(200);
   });
@@ -88,7 +106,9 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
     mockQuery.mockRejectedValueOnce(new Error("Connection lost"));
 
     const response = await server.fetch(
-      new Request("http://localhost/api/tickets/42", { method: "GET" }), {}, {}
+      new Request("http://localhost/api/tickets/42", { method: "GET" }),
+      {},
+      {},
     );
     expect(response.status).toBe(500);
     expect((await response.json()).message).toContain("Error al obtener");
@@ -98,11 +118,15 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
   it("4. PATCH /api/tickets/:id — DB throws → returns 500", async () => {
     mockQuery.mockRejectedValueOnce(new Error("Disk full"));
 
-    const response = await server.fetch(new Request("http://localhost/api/tickets/1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: "Resuelto" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "Resuelto" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(500);
     expect((await response.json()).message).toContain("Error al actualizar");
   });
@@ -112,7 +136,9 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
     mockQuery.mockRejectedValueOnce(new Error("Table locked"));
 
     const response = await server.fetch(
-      new Request("http://localhost/api/tickets/1", { method: "DELETE" }), {}, {}
+      new Request("http://localhost/api/tickets/1", { method: "DELETE" }),
+      {},
+      {},
     );
     expect(response.status).toBe(500);
     expect((await response.json()).message).toContain("Error al eliminar");
@@ -121,26 +147,34 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
   // ── Líneas 391-396: POST /api/auth/register ──
   it("6. POST /api/auth/register with new email returns 201", async () => {
     mockQuery
-      .mockResolvedValueOnce({ rowCount: 0, rows: [] })           // email no existe
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // email no existe
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 1, name: "Demo Org" }] }) // org
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{}] });         // INSERT user
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{}] }); // INSERT user
 
-    const response = await server.fetch(new Request("http://localhost/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "new@example.com", password: "Pass1!", company: "Demo Org" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "new@example.com", password: "Pass1!", company: "Demo Org" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(201);
   });
 
   it("7. POST /api/auth/register with duplicate email returns 409", async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 5 }] }); // email ya existe
 
-    const response = await server.fetch(new Request("http://localhost/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "duplicate@example.com", password: "Pass1!" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "duplicate@example.com", password: "Pass1!" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(409);
   });
 
@@ -150,18 +184,29 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
 
     mockQuery.mockResolvedValueOnce({
       rowCount: 1,
-      rows: [{
-        id: 7, password_hash: hashedPwd, is_verified: true,
-        full_name: "Test", company: "Acme", role: "owner",
-        organization_id: 1, organization_name: "Acme",
-      }],
+      rows: [
+        {
+          id: 7,
+          password_hash: hashedPwd,
+          is_verified: true,
+          full_name: "Test",
+          company: "Acme",
+          role: "owner",
+          organization_id: 1,
+          organization_name: "Acme",
+        },
+      ],
     });
 
-    const response = await server.fetch(new Request("http://localhost/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "owner@example.com", password: "correctPwd" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "owner@example.com", password: "correctPwd" }),
+      }),
+      {},
+      {},
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Set-Cookie")).toContain("smartticket_session");
@@ -170,11 +215,16 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
   it("9. GET /api/auth/verify with valid token returns HTML 200", async () => {
     const futureDate = new Date(Date.now() + 3600_000).toISOString();
     mockQuery
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 3, verification_token_expires: futureDate }] })
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: 3, verification_token_expires: futureDate }],
+      })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
 
     const response = await server.fetch(
-      new Request("http://localhost/api/auth/verify?token=valid-token"), {}, {}
+      new Request("http://localhost/api/auth/verify?token=valid-token"),
+      {},
+      {},
     );
     expect(response.status).toBe(200);
     const text = await response.text();
@@ -185,7 +235,9 @@ describe("Server.ts — Ramas faltantes (186-190, 312-313, 361-362, 371-372, 391
     mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
     const response = await server.fetch(
-      new Request("http://localhost/api/auth/verify?token=bad-token"), {}, {}
+      new Request("http://localhost/api/auth/verify?token=bad-token"),
+      {},
+      {},
     );
     expect(response.status).toBe(400);
     const text = await response.text();

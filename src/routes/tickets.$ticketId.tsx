@@ -15,9 +15,11 @@ import {
   CATEGORY_OPTIONS,
   PRIORITY_OPTIONS,
   STATUS_OPTIONS,
+  authHeaders,
   useTickets,
 } from "@/lib/tickets-store";
-import { getAuthSession } from "@/lib/auth-session";
+import { slaForPriority, slaProgressForPriority } from "@/lib/ticket-rules";
+import { isStaffSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/tickets/$ticketId")({
   head: ({ params }) => ({
@@ -39,12 +41,11 @@ function TicketDetailPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
+  // El solicitante consulta y comenta; gestionar el ticket es del equipo.
+  const staff = isStaffSession();
 
   useEffect(() => {
-    const token = getAuthSession()?.token;
-    fetch(`/api/tickets/${ticketId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    fetch(`/api/tickets/${ticketId}`, { headers: authHeaders() })
       .then((res) => {
         if (!res.ok) throw new Error("Not found");
         return res.json();
@@ -54,20 +55,21 @@ function TicketDetailPage() {
         const d = new Date(data.created_at);
         const pad = (n: number) => String(n).padStart(2, "0");
         const creadoEn = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const cerrado = data.status === "Resuelto" || data.status === "Cerrado";
 
         setTicket({
-          id: data.id,
+          id: String(data.id),
           asunto: data.subject,
           descripcion: data.description,
           categoria: data.category,
           prioridad: data.priority,
           estado: data.status,
           cliente: data.client,
-          empresa: "Demo Soluciones SAC",
+          empresa: data.organization_name || "",
           creadoEn: creadoEn,
-          tecnico: data.assigned_to ? `Asignado (${data.assigned_to})` : undefined,
-          slaRestante: data.sla || "—",
-          slaProgress: 0,
+          tecnico: data.technician_name || undefined,
+          slaRestante: cerrado ? "—" : data.sla || slaForPriority(data.priority),
+          slaProgress: cerrado ? 1 : slaProgressForPriority(data.priority),
           creadoPor: data.client,
           comentarios: [],
         });
@@ -81,6 +83,7 @@ function TicketDetailPage() {
   }, [ticketId]);
 
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     asunto: "",
     descripcion: "",
@@ -91,9 +94,13 @@ function TicketDetailPage() {
   });
   const [comentarios, setComentarios] = useState<TicketComment[]>([]);
   const [nuevoComentario, setNuevoComentario] = useState("");
+  const [publicando, setPublicando] = useState(false);
+  const [redactando, setRedactando] = useState(false);
 
+  // El formulario se resincroniza con el ticket, pero sólo mientras no se esté
+  // editando: si no, cada guardado pisaría lo que el usuario está escribiendo.
   useEffect(() => {
-    if (!ticket) return;
+    if (!ticket || editing) return;
     setForm({
       asunto: ticket.asunto,
       descripcion: ticket.descripcion,
@@ -102,17 +109,33 @@ function TicketDetailPage() {
       estado: ticket.estado as Status,
       tecnico: ticket.tecnico ?? "",
     });
-    setComentarios(ticket.comentarios ?? []);
   }, [
-    ticketId,
+    editing,
     ticket?.asunto,
     ticket?.descripcion,
     ticket?.categoria,
     ticket?.prioridad,
     ticket?.estado,
     ticket?.tecnico,
-    ticket?.comentarios,
   ]);
+
+  // Los comentarios se cargan del servidor sólo al cambiar de ticket; antes se
+  // reiniciaban con cualquier cambio de estado o prioridad y desaparecían.
+  useEffect(() => {
+    let cancelado = false;
+    setComentarios([]);
+
+    fetch(`/api/tickets/${ticketId}/comments`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!cancelado && Array.isArray(data)) setComentarios(data);
+      })
+      .catch((error) => console.error("Error cargando comentarios:", error));
+
+    return () => {
+      cancelado = true;
+    };
+  }, [ticketId]);
 
   if (loading) {
     return (
@@ -144,64 +167,116 @@ function TicketDetailPage() {
     );
   }
 
-  const handleSave = () => {
+  /**
+   * Aplica el patch en el servidor y sincroniza la vista con el ticket que
+   * este devuelve (SLA recalculado incluido). Antes se avisaba "guardado"
+   * aunque la petición fallara.
+   */
+  const applyPatch = async (patch: Partial<Ticket>, mensajeOk: string) => {
+    if (saving) return false;
+    setSaving(true);
+    try {
+      const updated = await updateTicket(ticket.id, patch);
+      setTicket((prev) => (prev ? { ...prev, ...patch, ...(updated ?? {}) } : null));
+      toast.success(mensajeOk);
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo guardar el cambio.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!form.asunto.trim()) {
       toast.error("El asunto no puede estar vacío.");
       return;
     }
-    const patch = {
-      asunto: form.asunto.trim(),
-      descripcion: form.descripcion.trim(),
-      categoria: form.categoria,
-      prioridad: form.prioridad,
-      estado: form.estado,
-      tecnico: form.tecnico.trim() || undefined,
-    };
-    updateTicket(ticket.id, patch);
-    setTicket((prev) => (prev ? { ...prev, ...patch } : null));
-    setEditing(false);
-    toast.success("Cambios guardados.");
+    const ok = await applyPatch(
+      {
+        asunto: form.asunto.trim(),
+        descripcion: form.descripcion.trim(),
+        categoria: form.categoria,
+        prioridad: form.prioridad,
+        estado: form.estado,
+        tecnico: form.tecnico.trim() || undefined,
+      },
+      "Cambios guardados.",
+    );
+    // Si el guardado falla (p. ej. técnico inexistente) el formulario sigue
+    // abierto con los datos del usuario en vez de descartarlos.
+    if (ok) setEditing(false);
   };
 
-  const handleQuickStatus = (estado: Status) => {
-    const patch = {
-      estado,
-      slaProgress: estado === "Resuelto" || estado === "Cerrado" ? 1 : ticket.slaProgress,
-      slaRestante: estado === "Resuelto" || estado === "Cerrado" ? "—" : ticket.slaRestante,
-    };
-    updateTicket(ticket.id, patch);
-    setTicket((prev) => (prev ? { ...prev, ...patch } : null));
-    toast.success(`Estado actualizado: ${estado}`);
-  };
+  const handleQuickStatus = (estado: Status) =>
+    applyPatch({ estado }, `Estado actualizado: ${estado}`);
 
-  const handleDelete = () => {
+  const handleQuickPriority = (prioridad: Priority) =>
+    applyPatch({ prioridad }, `Criticidad actualizada: ${prioridad}`);
+
+  const handleDelete = async () => {
     if (!window.confirm("¿Eliminar este ticket? Esta acción no se puede deshacer.")) return;
-    deleteTicket(ticket.id);
-    toast.success(`Ticket ${ticket.id} eliminado.`);
-    navigate({ to: "/tickets" });
+    try {
+      await deleteTicket(ticket.id);
+      toast.success(`Ticket ${ticket.id} eliminado.`);
+      navigate({ to: "/tickets" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el ticket.");
+    }
   };
 
-  const addComment = () => {
+  /** Pide a la IA el borrador y lo deja en el textarea para revisarlo antes de enviar. */
+  const redactarConIa = async () => {
+    setRedactando(true);
+    try {
+      const res = await fetch(`/api/ai/tickets/${ticket.id}/reply`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data?.message || "No se pudo redactar la respuesta.");
+
+      setNuevoComentario(data.borrador);
+      toast.success("Borrador listo. Revísalo antes de publicar.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo redactar la respuesta.");
+    } finally {
+      setRedactando(false);
+    }
+  };
+
+  const addComment = async () => {
     const texto = nuevoComentario.trim();
     if (!texto) return;
     if (texto.length > 1000) {
       toast.error("El comentario es demasiado largo (máx 1000 caracteres).");
       return;
     }
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const comment: TicketComment = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      autor: ticket.creadoPor || ticket.tecnico || "Tú",
-      fecha: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-      texto,
-    };
-    updateTicket(ticket.id, {
-      comentarios: [...(ticket.comentarios ?? []), comment],
-    });
-    setComentarios((prev) => [...prev, comment]);
-    setNuevoComentario("");
-    toast.success("Comentario publicado.");
+
+    setPublicando(true);
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/comments`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ texto }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || "No se pudo publicar el comentario.");
+      }
+
+      const comment: TicketComment = await res.json();
+      setComentarios((prev) => [...prev, comment]);
+      setNuevoComentario("");
+      toast.success("Comentario publicado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo publicar el comentario.");
+    } finally {
+      setPublicando(false);
+    }
   };
 
   return (
@@ -258,12 +333,13 @@ function TicketDetailPage() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-foreground text-background font-semibold text-sm rounded-sm hover:bg-foreground/90 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-foreground text-background font-semibold text-sm rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60"
                 >
-                  Guardar cambios
+                  {saving ? "Guardando…" : "Guardar cambios"}
                 </button>
               </>
-            ) : (
+            ) : !staff ? null : (
               <>
                 <button
                   onClick={handleDelete}
@@ -339,10 +415,10 @@ function TicketDetailPage() {
                     body={`Atendido por ${ticket.tecnico}.`}
                   />
                 )}
-                {comentarios.map((c, i) => (
+                {comentarios.map((c) => (
                   <TimelineItem
-                    key={i}
-                    t={`Hoy ${c.fecha}`}
+                    key={c.id}
+                    t={c.fecha}
                     title={`Comentario · ${c.autor}`}
                     body={c.texto}
                   />
@@ -361,9 +437,20 @@ function TicketDetailPage() {
               className="border border-border bg-card rounded-sm p-6 animate-reveal"
               style={{ animationDelay: "200ms" }}
             >
-              <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
-                Agregar comentario
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                  Agregar comentario
+                </h2>
+                {staff && (
+                  <button
+                    onClick={redactarConIa}
+                    disabled={redactando}
+                    className="px-3 py-1.5 border border-border text-[10px] font-mono uppercase tracking-widest rounded-sm hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    {redactando ? "Redactando…" : "✦ Redactar con IA"}
+                  </button>
+                )}
+              </div>
               <textarea
                 rows={4}
                 value={nuevoComentario}
@@ -375,10 +462,10 @@ function TicketDetailPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={addComment}
-                  disabled={!nuevoComentario.trim()}
+                  disabled={publicando || !nuevoComentario.trim()}
                   className="px-4 py-2 bg-foreground text-background font-semibold text-sm rounded-sm hover:bg-foreground/90 disabled:opacity-50"
                 >
-                  Publicar
+                  {publicando ? "Publicando…" : "Publicar"}
                 </button>
               </div>
             </section>
@@ -440,27 +527,56 @@ function TicketDetailPage() {
                 <DetailItem label="Categoría" value={ticket.categoria} />
                 <DetailItem label="Creado" value={ticket.creadoEn} />
 
-                <div className="border border-border bg-card rounded-sm p-4">
-                  <h3 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
-                    Cambio rápido de estado
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {STATUS_OPTIONS.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => handleQuickStatus(s)}
-                        disabled={s === ticket.estado}
-                        className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm transition-colors ${
-                          s === ticket.estado
-                            ? "bg-foreground text-background border-foreground cursor-default"
-                            : "border-border hover:bg-muted"
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {staff && (
+                  <>
+                    <div className="border border-border bg-card rounded-sm p-4">
+                      <h3 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
+                        Cambio rápido de estado
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {STATUS_OPTIONS.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => handleQuickStatus(s)}
+                            disabled={saving || s === ticket.estado}
+                            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm transition-colors disabled:opacity-60 ${
+                              s === ticket.estado
+                                ? "bg-foreground text-background border-foreground cursor-default"
+                                : "border-border hover:bg-muted"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="border border-border bg-card rounded-sm p-4">
+                      <h3 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
+                        Criticidad
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {PRIORITY_OPTIONS.map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => handleQuickPriority(p)}
+                            disabled={saving || p === ticket.prioridad}
+                            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm transition-colors disabled:opacity-60 ${
+                              p === ticket.prioridad
+                                ? "bg-foreground text-background border-foreground cursor-default"
+                                : "border-border hover:bg-muted"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-3">
+                        Al cambiar la criticidad se recalcula el SLA comprometido.
+                      </p>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </aside>

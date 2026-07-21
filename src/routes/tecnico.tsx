@@ -1,9 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { KpiCard } from "@/components/KpiCard";
 import { TicketCard } from "@/components/TicketCard";
-import { useTickets } from "@/lib/tickets-store";
+import { authHeaders, useTickets } from "@/lib/tickets-store";
+
+interface IncidentCluster {
+  titulo: string;
+  resumen: string;
+  categoria: string;
+  severidad: "alta" | "media" | "baja";
+  ticketIds: string[];
+}
 
 export const Route = createFileRoute("/tecnico")({
   head: () => ({
@@ -32,6 +40,24 @@ function slaToHours(sla: string | undefined): number {
 
 function TecnicoPage() {
   const { tickets } = useTickets();
+  const [incidentes, setIncidentes] = useState<IncidentCluster[]>([]);
+
+  // Se recalcula cuando cambia la cola: si entran 3 tickets de la misma caída,
+  // el aviso aparece solo sin que nadie tenga que pedirlo.
+  useEffect(() => {
+    let cancelado = false;
+
+    fetch("/api/ai/incidents", { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { incidentes: [] }))
+      .then((data) => {
+        if (!cancelado) setIncidentes(Array.isArray(data.incidentes) ? data.incidentes : []);
+      })
+      .catch((error) => console.error("Error detectando incidentes:", error));
+
+    return () => {
+      cancelado = true;
+    };
+  }, [tickets.length]);
 
   const cola = useMemo(
     () => tickets.filter((t) => t.estado !== "Cerrado" && t.estado !== "Resuelto"),
@@ -73,14 +99,30 @@ function TecnicoPage() {
       (t) => t.prioridad === "Baja" || t.prioridad === "Media",
     ).length;
     // Escala del 1–5: ponderamos resueltos sobre total, ajustado a 5
-    const score = Math.min(5, ((resueltos.length / Math.max(tickets.length, 1)) * 5 + (satisfactorios / Math.max(resueltos.length, 1)) * 5) / 2);
+    const score = Math.min(
+      5,
+      ((resueltos.length / Math.max(tickets.length, 1)) * 5 +
+        (satisfactorios / Math.max(resueltos.length, 1)) * 5) /
+        2,
+    );
     return score.toFixed(1);
   }, [tickets, resueltos]);
 
   // ── Export CSV ────────────────────────────────────────────────────────────
   const handleExportCsv = () => {
     const rows = [
-      ["ID", "Asunto", "Cliente", "Empresa", "Categoría", "Prioridad", "Estado", "SLA", "Técnico", "Creado"],
+      [
+        "ID",
+        "Asunto",
+        "Cliente",
+        "Empresa",
+        "Categoría",
+        "Prioridad",
+        "Estado",
+        "SLA",
+        "Técnico",
+        "Creado",
+      ],
       ...tickets.map((t) => [
         t.id,
         t.asunto,
@@ -137,6 +179,52 @@ function TecnicoPage() {
           </div>
         </header>
 
+        {incidentes.length > 0 && (
+          <div className="mb-12 space-y-3">
+            {incidentes.map((inc, i) => (
+              <div
+                key={i}
+                className={`border rounded-sm p-5 animate-reveal ${
+                  inc.severidad === "alta"
+                    ? "border-destructive/50 bg-destructive/5"
+                    : "border-warning/50 bg-warning/5"
+                }`}
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div
+                      className={`text-[10px] font-mono uppercase tracking-widest font-bold mb-1 ${
+                        inc.severidad === "alta" ? "text-destructive" : "text-warning"
+                      }`}
+                    >
+                      ⚠ Posible incidente masivo · severidad {inc.severidad}
+                    </div>
+                    <div className="font-bold">{inc.titulo}</div>
+                    <p className="text-sm text-muted-foreground mt-1">{inc.resumen}</p>
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider border border-border rounded-sm px-2 py-1 whitespace-nowrap">
+                    {inc.ticketIds.length} tickets · {inc.categoria}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {inc.ticketIds.map((id) => (
+                    <Link
+                      key={id}
+                      to="/tickets/$ticketId"
+                      params={{ ticketId: id }}
+                      className="px-2 py-1 text-[10px] font-mono border border-border rounded-sm hover:bg-muted transition-colors"
+                    >
+                      #{id}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           <KpiCard
             label="Cumplimiento SLA"
@@ -168,9 +256,7 @@ function TecnicoPage() {
             label="Puntaje CSAT"
             value={csatBase !== null ? `${csatBase}/5` : "—"}
             trend={
-              csatBase !== null
-                ? `${resueltos.length} tickets completados`
-                : "Sin valoraciones aún"
+              csatBase !== null ? `${resueltos.length} tickets completados` : "Sin valoraciones aún"
             }
             delay={200}
           />

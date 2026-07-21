@@ -1,3 +1,5 @@
+import { isStaff, normalizeRole, type Role } from "./roles";
+
 const AUTH_STORAGE_KEY = "smartticket-auth";
 
 export interface AuthSession {
@@ -9,6 +11,25 @@ export interface AuthSession {
   role?: string | null;
   loggedInAt?: number;
   token?: string | null;
+}
+
+type SessionListener = () => void;
+const listeners = new Set<SessionListener>();
+
+/**
+ * Avisa de los cambios de sesión. Sin esto, los datos que se cargan una sola vez
+ * al montar la app (la lista de tickets) se quedan con lo que se pidió antes de
+ * iniciar sesión, que es una petición sin token.
+ */
+export function subscribeAuthSession(listener: SessionListener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notifySessionChange() {
+  for (const listener of listeners) listener();
 }
 
 export function setAuthSession(
@@ -36,6 +57,7 @@ export function setAuthSession(
   });
 
   window.localStorage.setItem(AUTH_STORAGE_KEY, payload);
+  notifySessionChange();
 }
 
 export function clearAuthSession() {
@@ -44,6 +66,7 @@ export function clearAuthSession() {
   if (typeof document !== "undefined") {
     document.cookie = "smartticket_session=; Path=/; Max-Age=0; SameSite=Lax";
   }
+  notifySessionChange();
 }
 
 export function getAuthSession(): AuthSession | null {
@@ -67,4 +90,16 @@ export function getAuthToken() {
 export function isAuthenticated() {
   const auth = getAuthSession();
   return Boolean(auth && (auth.loggedInAt || auth.token));
+}
+
+/**
+ * Rol del usuario en sesión. Es sólo para decidir qué se muestra: el permiso de
+ * verdad lo aplica el API, que no confía en lo que diga el navegador.
+ */
+export function getSessionRole(): Role {
+  return normalizeRole(getAuthSession()?.role);
+}
+
+export function isStaffSession(): boolean {
+  return isStaff(getSessionRole());
 }

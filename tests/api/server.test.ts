@@ -11,7 +11,7 @@ jest.mock("../../src/lib/db", () => ({
 }));
 
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest
+  categorizeTicketWithAi: jest
     .fn<() => Promise<{ categoria: string; prioridad: string }>>()
     .mockResolvedValue({ categoria: "Software", prioridad: "Media" }),
 }));
@@ -45,15 +45,28 @@ describe("Server API Endpoints & Route Protection", () => {
   it("1. GET /api/tickets should return 200 and an array of mapped tickets", async () => {
     mockQuery.mockResolvedValueOnce({
       rowCount: 1,
-      rows: [{
-        id: 101, subject: "Servidor lento", description: "Lento", client: "Carlos",
-        category: "Software", priority: "Alta", status: "Abierto", sla: "4h",
-        created_at: new Date().toISOString(), organization_name: "Demo Soluciones SAC",
-        technician_name: "Ana Paredes",
-      }],
+      rows: [
+        {
+          id: 101,
+          subject: "Servidor lento",
+          description: "Lento",
+          client: "Carlos",
+          category: "Software",
+          priority: "Alta",
+          status: "Abierto",
+          sla: "4h",
+          created_at: new Date().toISOString(),
+          organization_name: "Demo Soluciones SAC",
+          technician_name: "Ana Paredes",
+        },
+      ],
     });
 
-    const response = await server.fetch(new Request("http://localhost/api/tickets", { method: "GET" }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets", { method: "GET" }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(Array.isArray(body)).toBe(true);
@@ -62,40 +75,60 @@ describe("Server API Endpoints & Route Protection", () => {
 
   it("2. GET /api/tickets/:id with nonexistent ID should return 404", async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/tickets/99999", { method: "GET" }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/99999", { method: "GET" }),
+      {},
+      {},
+    );
     expect(response.status).toBe(404);
   });
 
   it("3. Request without authorization token to a protected route should return 401", async () => {
-    const response = await server.fetch(new Request("http://localhost/api/auth/profile", { method: "GET" }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/profile", { method: "GET" }),
+      {},
+      {},
+    );
     expect(response.status).toBe(401);
   });
 
   it("4. Request with invalid or expired token should return 401", async () => {
-    const response = await server.fetch(new Request("http://localhost/api/auth/profile", {
-      method: "GET",
-      headers: { Authorization: "Bearer token-invalido-expirado" },
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/profile", {
+        method: "GET",
+        headers: { Authorization: "Bearer token-invalido-expirado" },
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(401);
   });
 
   it("5. PATCH /api/tickets/:id should return 200 on success", async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/tickets/1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: "Resuelto" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "Resuelto" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
   });
 
   it("6. PATCH /api/tickets/:id with tecnico=null clears assigned_to", async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/tickets/1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tecnico: null }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tecnico: null }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
   });
 
@@ -103,27 +136,39 @@ describe("Server API Endpoints & Route Protection", () => {
     mockQuery
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 5 }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/tickets/1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tecnico: "Ana Paredes" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tecnico: "Ana Paredes" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
   });
 
   it("8. DELETE /api/tickets/:id should return 200", async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/tickets/1", { method: "DELETE" }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/tickets/1", { method: "DELETE" }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
     expect((await response.json()).success).toBe(true);
   });
 
   it("9. POST /api/auth/forgot-password returns 200 with generic message", async () => {
-    const response = await server.fetch(new Request("http://localhost/api/auth/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "cualquier@correo.com" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "cualquier@correo.com" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
     expect((await response.json()).message).toContain("Gmail");
   });
@@ -132,11 +177,15 @@ describe("Server API Endpoints & Route Protection", () => {
     const cookie = makeAuthCookie(10, "user@example.com");
     // No cambiamos el email, así que updateProfile solo hace 1 query (el UPDATE)
     mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [] });
-    const response = await server.fetch(new Request("http://localhost/api/auth/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
-      body: JSON.stringify({ fullName: "Nuevo Nombre" }),
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({ fullName: "Nuevo Nombre" }),
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
   });
 
@@ -144,12 +193,26 @@ describe("Server API Endpoints & Route Protection", () => {
     const cookie = makeAuthCookie(10, "user@example.com");
     mockQuery.mockResolvedValueOnce({
       rowCount: 1,
-      rows: [{ id: 10, email: "user@example.com", full_name: "Test", company: null, role: "member", organization_id: 1, organization_name: "Org" }],
+      rows: [
+        {
+          id: 10,
+          email: "user@example.com",
+          full_name: "Test",
+          company: null,
+          role: "member",
+          organization_id: 1,
+          organization_name: "Org",
+        },
+      ],
     });
-    const response = await server.fetch(new Request("http://localhost/api/auth/profile", {
-      method: "GET",
-      headers: { Cookie: cookie },
-    }), {}, {});
+    const response = await server.fetch(
+      new Request("http://localhost/api/auth/profile", {
+        method: "GET",
+        headers: { Cookie: cookie },
+      }),
+      {},
+      {},
+    );
     expect(response.status).toBe(200);
   });
 });

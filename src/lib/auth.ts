@@ -57,10 +57,61 @@ export function getAuthenticatedUser(request: Request, env?: AuthEnv) {
   }
 }
 
-async function getOrCreateOrganization(env: AppEnv, companyName: string) {
+/**
+ * Proveedores de correo personal. Su dominio NO puede identificar a una
+ * organización: si lo hiciera, cualquiera con un Gmail entraría a la primera
+ * empresa que se registró con un Gmail.
+ */
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "hotmail.es",
+  "outlook.com",
+  "outlook.es",
+  "live.com",
+  "live.com.pe",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.es",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+]);
+
+function getEmailDomain(email: string): string | null {
+  const domain = email.split("@")[1]?.trim().toLowerCase();
+  return domain || null;
+}
+
+/** Dominio utilizable como identidad de empresa (descarta el correo personal). */
+export function getCorporateDomain(email: string): string | null {
+  const domain = getEmailDomain(email);
+  return domain && !PUBLIC_EMAIL_DOMAINS.has(domain) ? domain : null;
+}
+
+async function getOrCreateOrganization(env: AppEnv, companyName: string, email: string) {
+  const corporateDomain = getCorporateDomain(email);
+
+  // 1) Si el dominio del correo ya identifica a una organización, el usuario se
+  //    une a ella sin que nadie lo invite: tener ese correo ya prueba que
+  //    pertenece a la empresa.
+  if (corporateDomain) {
+    const byDomain = await query(env, "SELECT id, name FROM organizations WHERE domain = $1", [
+      corporateDomain,
+    ]);
+    if ((byDomain.rowCount ?? 0) > 0) {
+      const record = byDomain.rows[0] as { id: number; name: string };
+      return { id: record.id, name: record.name, created: false, joinedByDomain: true };
+    }
+  }
+
   const normalizedName = companyName.trim() || "Organización sin nombre";
   const slug = slugify(normalizedName);
 
+  // 2) Si no, se busca por nombre como antes.
   const existing = await query(
     env,
     "SELECT id, name FROM organizations WHERE slug = $1 OR lower(name) = lower($2) LIMIT 1",
@@ -69,17 +120,19 @@ async function getOrCreateOrganization(env: AppEnv, companyName: string) {
 
   if ((existing.rowCount ?? 0) > 0) {
     const record = existing.rows[0] as { id: number; name: string };
-    return { id: record.id, name: record.name, created: false };
+    return { id: record.id, name: record.name, created: false, joinedByDomain: false };
   }
 
+  // 3) Organización nueva: queda registrada con el dominio de quien la crea,
+  //    para que sus compañeros puedan unirse solos después.
   const inserted = await query(
     env,
-    "INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id, name",
-    [normalizedName, slug],
+    "INSERT INTO organizations (name, slug, domain) VALUES ($1, $2, $3) RETURNING id, name",
+    [normalizedName, slug, corporateDomain],
   );
 
   const record = inserted.rows[0] as { id: number; name: string };
-  return { id: record.id, name: record.name, created: true };
+  return { id: record.id, name: record.name, created: true, joinedByDomain: false };
 }
 
 export async function registerUser(
@@ -101,8 +154,17 @@ export async function registerUser(
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + TOKEN_LIFETIME_MINUTES * 60 * 1000).toISOString();
   const companyName = payload.company?.trim() || "Organización sin nombre";
-  const organization = await getOrCreateOrganization(env as AppEnv, companyName);
-  const role = organization.created ? "owner" : payload.role === "owner" ? "owner" : "member";
+  const organization = await getOrCreateOrganization(env as AppEnv, companyName, normalizedEmail);
+
+  // Quien crea la organización la administra. Quien llega por el dominio de su
+  // correo entra como solicitante: reporta incidencias y sigue las suyas.
+  const role = organization.created
+    ? "owner"
+    : organization.joinedByDomain
+      ? "member"
+      : payload.role === "owner"
+        ? "owner"
+        : "member";
 
   await query(
     env as AppEnv,

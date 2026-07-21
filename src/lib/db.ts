@@ -118,6 +118,103 @@ async function ensureTablesExist(env: AppEnv) {
     );
   `,
   );
+
+  await query(
+    env,
+    `
+    CREATE TABLE IF NOT EXISTS ticket_comments (
+      id SERIAL PRIMARY KEY,
+      ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      author_name TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `,
+  );
+
+  // El detalle del ticket siempre lee los comentarios filtrando por ticket_id.
+  await query(
+    env,
+    `CREATE INDEX IF NOT EXISTS ticket_comments_ticket_id_idx
+     ON ticket_comments (ticket_id, created_at)`,
+  );
+
+  // Cada vez que la IA propone una solución antes de crear el ticket queda un
+  // registro aquí. Es lo que permite calcular la tasa de deflexión.
+  await query(
+    env,
+    `
+    CREATE TABLE IF NOT EXISTS ai_deflections (
+      id SERIAL PRIMARY KEY,
+      organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      suggestion TEXT,
+      confidence REAL NOT NULL DEFAULT 0,
+      accepted BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `,
+  );
+
+  await query(
+    env,
+    `CREATE INDEX IF NOT EXISTS ai_deflections_org_idx
+     ON ai_deflections (organization_id, created_at)`,
+  );
+
+  // El resumen ejecutivo se genera una vez al día por organización; sin esta
+  // caché cada carga del dashboard sería una llamada al modelo.
+  await query(
+    env,
+    `
+    CREATE TABLE IF NOT EXISTS ai_briefings (
+      id SERIAL PRIMARY KEY,
+      organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      day DATE NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (organization_id, day)
+    );
+  `,
+  );
+
+  await applyAdditiveMigrations(env);
+}
+
+/**
+ * Las tablas se crean con CREATE TABLE IF NOT EXISTS, así que una base que ya
+ * existía nunca recibiría las columnas nuevas. Estas sentencias son idempotentes
+ * y se pueden ejecutar en cada arranque sin coste apreciable.
+ */
+async function applyAdditiveMigrations(env: AppEnv) {
+  // Quién tecleó el ticket y de quién es el problema son dos cosas distintas:
+  // un técnico puede registrar una incidencia en nombre de un trabajador, y ese
+  // trabajador debe seguir viéndola en "Mis tickets".
+  await query(
+    env,
+    `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS created_by INTEGER
+       REFERENCES users(id) ON DELETE SET NULL`,
+  );
+  await query(
+    env,
+    `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS requester_id INTEGER
+       REFERENCES users(id) ON DELETE SET NULL`,
+  );
+  await query(
+    env,
+    `CREATE INDEX IF NOT EXISTS tickets_requester_idx
+       ON tickets (organization_id, requester_id)`,
+  );
+
+  // Dominio de correo corporativo: permite que un trabajador se registre solo y
+  // caiga en la organización correcta sin que nadie lo invite.
+  await query(env, `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS domain TEXT`);
+  await query(
+    env,
+    `CREATE UNIQUE INDEX IF NOT EXISTS organizations_domain_idx
+       ON organizations (domain) WHERE domain IS NOT NULL`,
+  );
 }
 
 async function seedDemoWorkspace(env: AppEnv) {

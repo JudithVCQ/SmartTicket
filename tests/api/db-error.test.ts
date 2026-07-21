@@ -7,7 +7,7 @@ jest.mock("../../src/lib/db", () => ({
 }));
 
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest
+  categorizeTicketWithAi: jest
     .fn<() => Promise<{ categoria: string; prioridad: string }>>()
     .mockResolvedValue({ categoria: "Software", prioridad: "Media" }),
 }));

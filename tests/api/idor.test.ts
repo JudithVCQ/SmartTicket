@@ -9,7 +9,9 @@ jest.mock("../../src/lib/db", () => ({
 }));
 
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest.fn<() => Promise<any>>().mockResolvedValue({ categoria: "Software", prioridad: "Media" }),
+  categorizeTicketWithAi: jest
+    .fn<() => Promise<any>>()
+    .mockResolvedValue({ categoria: "Software", prioridad: "Media" }),
 }));
 
 jest.mock("../../src/lib/mailer", () => ({
@@ -54,7 +56,7 @@ describe("IDOR Security Tests", () => {
     });
 
     const response = await server.fetch(request, {}, {});
-    
+
     // Debe denegar el acceso debido a que las organizaciones son distintas (1 !== 2)
     expect(response.status).toBe(403);
     const body = await response.json();

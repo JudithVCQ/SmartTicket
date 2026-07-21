@@ -13,7 +13,8 @@ import appCss from "../styles.css?url";
 import { TicketsProvider } from "@/lib/tickets-store";
 import { TeamProvider } from "@/lib/team-store";
 import { Toaster } from "@/components/ui/sonner";
-import { isAuthenticated } from "@/lib/auth-session";
+import { getSessionRole, isAuthenticated } from "@/lib/auth-session";
+import { canAccessPath, isStaff } from "@/lib/roles";
 
 function NotFoundComponent() {
   return (
@@ -74,9 +75,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   beforeLoad: ({ location }) => {
+    // La sesión vive en localStorage, que no existe durante el SSR: si el guard
+    // se evaluara en el servidor, isAuthenticated() sería siempre false y toda
+    // navegación dura a una ruta protegida acabaría en /login aunque el usuario
+    // tenga sesión. Se evalúa sólo en el navegador; los datos siguen protegidos
+    // porque el API exige el token en cada petición.
+    if (typeof window === "undefined") return;
+
+    // Cada rol aterriza donde le sirve: el equipo en el panel, quien reporta
+    // directamente en sus tickets.
+    const inicio = isStaff(getSessionRole()) ? "/dashboard" : "/tickets";
+
     if (location.pathname === "/") {
       if (isAuthenticated()) {
-        throw redirect({ to: "/dashboard" });
+        throw redirect({ to: inicio });
       }
       throw redirect({ to: "/login" });
     }
@@ -84,13 +96,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     const publicPaths = ["/login", "/register", "/forgot-password"];
     if (publicPaths.includes(location.pathname)) {
       if (isAuthenticated()) {
-        throw redirect({ to: "/dashboard" });
+        throw redirect({ to: inicio });
       }
       return;
     }
 
     if (!isAuthenticated()) {
       throw redirect({ to: "/login" });
+    }
+
+    // Las pantallas de operación no son para quien sólo reporta incidencias.
+    // Esto es cosmético: el permiso real lo aplica el API en cada petición.
+    if (!canAccessPath(getSessionRole(), location.pathname)) {
+      throw redirect({ to: "/tickets" });
     }
   },
   head: () => ({

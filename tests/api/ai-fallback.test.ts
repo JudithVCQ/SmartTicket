@@ -8,7 +8,7 @@ jest.mock("../../src/lib/db", () => ({
 
 // Gemini FALLA — lanza un error
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest
+  categorizeTicketWithAi: jest
     .fn<() => Promise<never>>()
     .mockRejectedValue(new Error("Gemini API unavailable")),
 }));

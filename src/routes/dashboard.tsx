@@ -1,8 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { KpiCard } from "@/components/KpiCard";
-import { useTickets } from "@/lib/tickets-store";
+import { authHeaders, useTickets } from "@/lib/tickets-store";
+
+interface BriefingData {
+  disponible: boolean;
+  motivo?: string;
+  resumen?: string;
+  hallazgos?: string[];
+  recomendacion?: string;
+  generadoEn?: string;
+  deflexion?: { aceptadas: number; ofrecidas: number; ticketsCreados: number; tasa: number };
+}
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -20,6 +30,28 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardPage() {
   const { tickets } = useTickets();
+  const [briefing, setBriefing] = useState<BriefingData | null>(null);
+  const [regenerando, setRegenerando] = useState(false);
+
+  const cargarBriefing = useCallback(async (refresh = false) => {
+    if (refresh) setRegenerando(true);
+    try {
+      const res = await fetch(`/api/ai/briefing${refresh ? "?refresh=1" : ""}`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) setBriefing(await res.json());
+    } catch (error) {
+      console.error("Error cargando el resumen ejecutivo:", error);
+    } finally {
+      setRegenerando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarBriefing();
+  }, [cargarBriefing]);
+
+  const deflexion = briefing?.deflexion;
 
   const activos = useMemo(
     () => tickets.filter((t) => t.estado !== "Cerrado" && t.estado !== "Resuelto"),
@@ -64,7 +96,18 @@ function DashboardPage() {
 
   const handleExportCsv = () => {
     const rows = [
-      ["ID", "Asunto", "Cliente", "Empresa", "Categoría", "Prioridad", "Estado", "SLA", "Técnico", "Creado"],
+      [
+        "ID",
+        "Asunto",
+        "Cliente",
+        "Empresa",
+        "Categoría",
+        "Prioridad",
+        "Estado",
+        "SLA",
+        "Técnico",
+        "Creado",
+      ],
       ...tickets.map((t) => [
         t.id,
         t.asunto,
@@ -117,7 +160,70 @@ function DashboardPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <section
+          className="mb-12 border border-border bg-foreground text-background rounded-sm p-8 animate-reveal"
+          style={{ animationDelay: "20ms" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="size-2 rounded-full bg-primary animate-pulse" />
+              <h2 className="font-bold uppercase tracking-widest text-xs">Resumen ejecutivo IA</h2>
+            </div>
+            <button
+              onClick={() => cargarBriefing(true)}
+              disabled={regenerando}
+              className="px-3 py-1.5 border border-background/30 text-[10px] font-mono uppercase tracking-widest rounded-sm hover:bg-background/10 disabled:opacity-50"
+            >
+              {regenerando ? "Generando…" : "Regenerar"}
+            </button>
+          </div>
+
+          {!briefing ? (
+            <p className="text-sm text-zinc-400">Analizando la operación…</p>
+          ) : briefing.disponible ? (
+            <>
+              <p className="text-lg leading-relaxed font-medium">{briefing.resumen}</p>
+
+              {briefing.hallazgos && briefing.hallazgos.length > 0 && (
+                <ul className="mt-5 space-y-2">
+                  {briefing.hallazgos.map((h, i) => (
+                    <li key={i} className="flex gap-3 text-sm text-zinc-300">
+                      <span className="text-primary font-bold">→</span>
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {briefing.recomendacion && (
+                <div className="mt-5 pt-4 border-t border-background/20">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
+                    Acción recomendada para hoy
+                  </div>
+                  <div className="text-sm font-semibold">{briefing.recomendacion}</div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-zinc-400">
+              El resumen no está disponible ({briefing.motivo ?? "sin datos"}). Los KPIs de abajo
+              siguen actualizados.
+            </p>
+          )}
+        </section>
+
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+          <KpiCard
+            label="Resueltos sin ticket"
+            value={deflexion ? `${Math.round(deflexion.tasa * 100)}%` : "—"}
+            trend={
+              deflexion && deflexion.aceptadas > 0
+                ? `${deflexion.aceptadas} incidencias que la IA resolvió sola`
+                : "Aún sin deflexiones registradas"
+            }
+            trendTone={deflexion && deflexion.tasa > 0.2 ? "success" : "muted"}
+            delay={25}
+          />
           <KpiCard
             label="Total tickets"
             value={String(tickets.length)}

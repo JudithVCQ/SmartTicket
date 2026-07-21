@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AuthLayout, Field, PrimaryButton } from "@/components/AuthLayout";
 import { setAuthSession } from "@/lib/auth-session";
+import { isStaff, normalizeRole } from "@/lib/roles";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -45,7 +46,8 @@ function LoginPage() {
       setAuthSession(email, payload.user, payload.token);
       setEmail("");
       setPassword("");
-      navigate({ to: "/dashboard" });
+      // El equipo de soporte entra al panel; quien sólo reporta, a sus tickets.
+      navigate({ to: isStaff(normalizeRole(payload.user?.role)) ? "/dashboard" : "/tickets" });
     } catch (error) {
       toast.error("Error de conexión. Intenta nuevamente.");
     } finally {

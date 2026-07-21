@@ -4,7 +4,7 @@ import { describe, it, expect, jest, afterAll } from "@jest/globals";
 // Mantendremos la base de datos real (no simulada) conectándose al PostgreSQL local/Aiven.
 
 jest.mock("../../src/lib/ai", () => ({
-  categorizeTicketWithGemini: jest
+  categorizeTicketWithAi: jest
     .fn<() => Promise<{ categoria: string; prioridad: string }>>()
     .mockResolvedValue({
       categoria: "Software",
