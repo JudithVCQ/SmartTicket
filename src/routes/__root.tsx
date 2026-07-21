@@ -11,6 +11,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { TicketsProvider } from "@/lib/tickets-store";
+import { TeamProvider } from "@/lib/team-store";
 import { Toaster } from "@/components/ui/sonner";
 import { isAuthenticated } from "@/lib/auth-session";
 
@@ -153,8 +154,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <TicketsProvider>
-        <Outlet />
-        <Toaster position="top-right" />
+        <TeamProvider>
+          <Outlet />
+          <Toaster position="top-right" />
+        </TeamProvider>
       </TicketsProvider>
     </QueryClientProvider>
   );

@@ -5,6 +5,8 @@ const links = [
   { to: "/dashboard", label: "Inicio" },
   { to: "/tickets", label: "Mis Tickets" },
   { to: "/tecnico", label: "Operaciones" },
+  { to: "/equipo", label: "Equipo" },
+  { to: "/organizacion", label: "Organización" },
 ] as const;
 
 export function AppNav() {
