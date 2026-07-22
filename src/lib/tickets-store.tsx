@@ -30,7 +30,7 @@ interface TicketsContextValue {
   loading: boolean;
   getTicket: (id: string) => Ticket | undefined;
   createTicket: (draft: TicketDraft) => Promise<CreatedTicket>;
-  updateTicket: (id: string, patch: Partial<Ticket>) => Promise<Ticket | null>;
+  updateTicket: (id: string, patch: TicketPatch) => Promise<Ticket | null>;
   deleteTicket: (id: string) => Promise<void>;
   refreshTickets: () => Promise<void>;
 }
@@ -51,14 +51,33 @@ const PATCHABLE_FIELDS = [
   "prioridad",
   "estado",
   "tecnico",
+  "tecnicoId",
 ] as const;
 
-function toPatchPayload(patch: Partial<Ticket>) {
+/** `tecnicoId: null` desasigna; por eso el patch admite null explícito. */
+export type TicketPatch = Omit<Partial<Ticket>, "tecnico" | "tecnicoId"> & {
+  tecnico?: string | null;
+  tecnicoId?: string | null;
+};
+
+function toPatchPayload(patch: TicketPatch) {
   const payload: Record<string, unknown> = {};
   for (const field of PATCHABLE_FIELDS) {
     if (patch[field] !== undefined) payload[field] = patch[field];
   }
   return payload;
+}
+
+/**
+ * El patch usa `null` para desasignar, pero el Ticket de la UI no admite null.
+ * Esto traduce un patch a los campos que se pueden fusionar en el estado local.
+ */
+export function toLocalTicketFields(patch: TicketPatch): Partial<Ticket> {
+  return {
+    ...patch,
+    tecnico: patch.tecnico ?? undefined,
+    tecnicoId: patch.tecnicoId ?? undefined,
+  };
 }
 
 async function readErrorMessage(res: Response, fallback: string) {
@@ -135,7 +154,7 @@ export function TicketsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateTicket = useCallback(
-    async (id: string, patch: Partial<Ticket>): Promise<Ticket | null> => {
+    async (id: string, patch: TicketPatch): Promise<Ticket | null> => {
       const payload = toPatchPayload(patch);
       if (Object.keys(payload).length === 0) return null;
 
@@ -153,7 +172,9 @@ export function TicketsProvider({ children }: { children: React.ReactNode }) {
       // evita que la UI muestre valores que la BD no llegó a guardar.
       const body = await res.json().catch(() => ({}));
       const updated = (body?.ticket ?? null) as Ticket | null;
-      setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...(updated ?? patch) } : t)));
+      setTickets((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...(updated ?? toLocalTicketFields(patch)) } : t)),
+      );
       return updated;
     },
     [],

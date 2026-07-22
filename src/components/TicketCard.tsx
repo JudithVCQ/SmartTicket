@@ -1,7 +1,18 @@
 import { Link } from "@tanstack/react-router";
 import { type Ticket, priorityColor, priorityBadge } from "@/lib/mock-data";
 
-export function TicketCard({ ticket, delay = 0 }: { ticket: Ticket; delay?: number }) {
+export function TicketCard({
+  ticket,
+  delay = 0,
+  onTomar,
+  tomando = false,
+}: {
+  ticket: Ticket;
+  delay?: number;
+  /** Si se pasa, la tarjeta ofrece autoasignación cuando el ticket está libre. */
+  onTomar?: (ticket: Ticket) => void;
+  tomando?: boolean;
+}) {
   return (
     <div
       className="group relative p-6 border border-border bg-card rounded-sm hover:border-primary/50 transition-all animate-reveal"
@@ -36,16 +47,33 @@ export function TicketCard({ ticket, delay = 0 }: { ticket: Ticket; delay?: numb
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] uppercase font-mono text-muted-foreground">Cliente</span>
-            <span className="text-sm font-medium">{ticket.empresa}</span>
+            <span className="text-sm font-medium">{ticket.cliente || ticket.empresa}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase font-mono text-muted-foreground">Técnico</span>
+            <span className={`text-sm font-medium ${ticket.tecnico ? "" : "text-warning"}`}>
+              {ticket.tecnico ?? "Sin asignar"}
+            </span>
           </div>
         </div>
-        <Link
-          to="/tickets/$ticketId"
-          params={{ ticketId: ticket.id }}
-          className="px-4 py-2 border border-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-foreground hover:text-background transition-all rounded-sm"
-        >
-          Gestionar
-        </Link>
+        <div className="flex gap-2">
+          {onTomar && !ticket.tecnicoId && (
+            <button
+              onClick={() => onTomar(ticket)}
+              disabled={tomando}
+              className="px-4 py-2 bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-widest rounded-sm hover:bg-primary/90 transition-all disabled:opacity-60"
+            >
+              {tomando ? "Tomando…" : "Tomar"}
+            </button>
+          )}
+          <Link
+            to="/tickets/$ticketId"
+            params={{ ticketId: ticket.id }}
+            className="px-4 py-2 border border-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-foreground hover:text-background transition-all rounded-sm"
+          >
+            Gestionar
+          </Link>
+        </div>
       </div>
     </div>
   );

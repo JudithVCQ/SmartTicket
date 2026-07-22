@@ -179,11 +179,11 @@ const RESUELTOS: SeedTicket[] = [
     categoria: "Redes",
     prioridad: "Media",
     estado: "Cerrado",
-    tecnico: ANA,
+    tecnico: BRUNO,
     haceMinutos: 12 * DIA,
     comentarios: [
       {
-        autor: "Ana Paredes",
+        autor: "Bruno Castro",
         texto:
           "SOLUCIÓN: el dominio no tenía registros SPF ni DKIM configurados, por eso los servidores " +
           "de destino lo marcaban como sospechoso. Se agregó el registro SPF en el DNS y se activó " +
@@ -228,11 +228,11 @@ const RESUELTOS: SeedTicket[] = [
     categoria: "Software",
     prioridad: "Media",
     estado: "Resuelto",
-    tecnico: ANA,
+    tecnico: CARLA,
     haceMinutos: 5 * DIA,
     comentarios: [
       {
-        autor: "Ana Paredes",
+        autor: "Carla Rojas",
         texto:
           "SOLUCIÓN: el rol 'Compras' sí estaba asignado pero la sesión del usuario tenía los " +
           "permisos viejos en caché. Se asignó el rol desde Administración > Usuarios > Roles y se " +
@@ -517,11 +517,11 @@ const SEMANA_PREVIA: SeedTicket[] = [
     categoria: "Software",
     prioridad: "Baja",
     estado: "Cerrado",
-    tecnico: ANA,
+    tecnico: CARLA,
     haceMinutos: 12 * DIA,
     comentarios: [
       {
-        autor: "Ana Paredes",
+        autor: "Carla Rojas",
         texto:
           "SOLUCIÓN: usuario creado con el perfil 'Consulta Contable'. Credenciales enviadas al " +
           "correo de la jefa del área para que se las entregue en su primer día.",

@@ -18,6 +18,7 @@ import {
   draftReply,
   getBriefing,
   getIncidents,
+  routeTicket,
   suggestResolution,
 } from "./lib/ai-service";
 import {
@@ -191,6 +192,7 @@ type TicketRow = {
   priority?: string | null;
   status?: string | null;
   sla?: string | null;
+  assigned_to?: number | null;
   created_at?: string | Date | null;
   organization_name?: string | null;
   technician_name?: string | null;
@@ -216,6 +218,7 @@ function mapTicketRow(row: TicketRow) {
       ? new Date(row.created_at).toISOString().slice(0, 16).replace("T", " ")
       : "",
     tecnico: row.technician_name || undefined,
+    tecnicoId: row.assigned_to != null ? String(row.assigned_to) : undefined,
     tecnicoEmail: row.technician_email || undefined,
   };
 }
@@ -534,11 +537,29 @@ async function handleTicketsApi(request: Request, env: unknown) {
         solicitante = pedido;
       }
 
+      // Enrutamiento: un ticket que nace sin dueño se queda esperando a que
+      // alguien lo vea. Sólo se hace con sesión, porque hace falta saber de qué
+      // equipo estamos repartiendo el trabajo.
+      let asignacion = null;
+      if (user) {
+        try {
+          asignacion = await routeTicket(appEnv, organizationId, {
+            asunto,
+            descripcion,
+            categoria,
+            prioridad,
+          });
+        } catch (error) {
+          console.error("No se pudo enrutar el ticket, queda en la cola:", error);
+        }
+      }
+
       const result = await query(
         appEnv,
         `INSERT INTO tickets (organization_id, subject, description, client, category,
-                              priority, status, sla, created_by, requester_id, ai_priority)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+                              priority, status, sla, created_by, requester_id, ai_priority,
+                              assigned_to)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
         [
           organizationId,
           asunto,
@@ -551,8 +572,21 @@ async function handleTicketsApi(request: Request, env: unknown) {
           creadoPor,
           solicitante,
           prioridad,
+          asignacion ? Number(asignacion.tecnicoId) : null,
         ],
       );
+
+      // El motivo queda en la línea de tiempo: una asignación automática que no
+      // se puede auditar es una caja negra, y el técnico merece saber por qué
+      // le tocó a él.
+      if (asignacion) {
+        await query(
+          appEnv,
+          `INSERT INTO ticket_comments (ticket_id, author_id, author_name, body)
+           VALUES ($1, NULL, $2, $3)`,
+          [result.rows[0].id, "Asistente IA", asignacion.motivo],
+        ).catch((error) => console.error("No se pudo registrar el motivo del reparto:", error));
+      }
 
       return jsonResponse(result.rows[0], 201);
     } catch (error) {
@@ -685,7 +719,7 @@ async function handleTicketsApi(request: Request, env: unknown) {
         await ensureSchema(appEnv);
 
         const payload = await request.json().catch(() => ({}));
-        const { estado, prioridad, tecnico, asunto, descripcion, categoria } = payload;
+        const { estado, prioridad, tecnico, tecnicoId, asunto, descripcion, categoria } = payload;
 
         if (estado !== undefined && !isStatus(estado)) {
           return jsonResponse({ message: `Estado no válido: ${estado}` }, 400);
@@ -735,7 +769,28 @@ async function handleTicketsApi(request: Request, env: unknown) {
           values.push(categoria);
         }
 
-        if (tecnico !== undefined) {
+        // Asignar por id es lo que usa la interfaz: el nombre puede repetirse y
+        // obliga a escribirlo exacto. Se mantiene `tecnico` por compatibilidad.
+        if (tecnicoId !== undefined) {
+          if (tecnicoId === null || tecnicoId === "") {
+            updates.push(`assigned_to = NULL`);
+          } else {
+            const destino = await query(
+              appEnv,
+              `SELECT id FROM users
+               WHERE id = $1 AND organization_id = $2 AND role IN ('owner', 'tech')`,
+              [Number(tecnicoId), actor.organizationId],
+            );
+            if ((destino.rowCount ?? 0) === 0) {
+              return jsonResponse(
+                { message: "Ese técnico no existe o no pertenece a tu equipo" },
+                400,
+              );
+            }
+            updates.push(`assigned_to = $${idx++}`);
+            values.push(Number(tecnicoId));
+          }
+        } else if (tecnico !== undefined) {
           if (tecnico === null || tecnico === "") {
             updates.push(`assigned_to = NULL`);
           } else {

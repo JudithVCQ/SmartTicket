@@ -3,6 +3,8 @@ import { isStaff, normalizeRole, type Role } from "./roles";
 const AUTH_STORAGE_KEY = "smartticket-auth";
 
 export interface AuthSession {
+  /** Id del usuario: necesario para saber si un ticket está asignado a ti. */
+  userId?: number | null;
   email?: string | null;
   fullName?: string | null;
   company?: string | null;
@@ -35,6 +37,7 @@ function notifySessionChange() {
 export function setAuthSession(
   email?: string,
   profile?: {
+    id?: number | null;
     fullName?: string | null;
     company?: string | null;
     organizationName?: string | null;
@@ -46,6 +49,7 @@ export function setAuthSession(
   if (typeof window === "undefined") return;
 
   const payload = JSON.stringify({
+    userId: profile?.id ?? null,
     email: email?.trim().toLowerCase() ?? null,
     fullName: profile?.fullName?.trim() ?? null,
     company: profile?.company?.trim() ?? null,

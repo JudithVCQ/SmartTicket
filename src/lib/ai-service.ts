@@ -3,9 +3,11 @@ import {
   draftReplyWithAi,
   generateBriefingWithAi,
   isAiConfigured,
+  suggestAssigneeWithAi,
   suggestResolutionWithAi,
   type Briefing,
   type IncidentCluster,
+  type RoutingCandidate,
 } from "./ai";
 import { ensureSchema, query, AppEnv } from "./db";
 import { checkTicketAccess, resolveOrganizationId } from "./org-access";
@@ -504,4 +506,110 @@ export async function draftReply(
     console.error("Error redactando la respuesta:", error);
     return { status: 502, body: { message: "La IA no pudo redactar la respuesta" } };
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 6. Enrutamiento automático
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Carga y experiencia de cada persona del equipo de soporte. Los números son
+ * reales: salen de los tickets, no los estima el modelo.
+ */
+async function getRoutingCandidates(env: AppEnv, organizationId: number, categoria: string) {
+  const result = await query(
+    env,
+    `SELECT u.id, u.full_name, u.email,
+            COUNT(*) FILTER (
+              WHERE t.status NOT IN ('Resuelto', 'Cerrado')
+            ) AS abiertos,
+            COUNT(*) FILTER (
+              WHERE t.status IN ('Resuelto', 'Cerrado') AND t.category = $2
+            ) AS resueltos_categoria,
+            COUNT(*) FILTER (WHERE t.status IN ('Resuelto', 'Cerrado')) AS resueltos_total
+     FROM users u
+     LEFT JOIN tickets t ON t.assigned_to = u.id AND t.organization_id = u.organization_id
+     WHERE u.organization_id = $1 AND u.role IN ('owner', 'tech')
+     GROUP BY u.id, u.full_name, u.email`,
+    [organizationId, categoria],
+  );
+
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    nombre: (row.full_name as string) || (row.email as string),
+    abiertos: Number(row.abiertos ?? 0),
+    resueltosEnCategoria: Number(row.resueltos_categoria ?? 0),
+    resueltosTotal: Number(row.resueltos_total ?? 0),
+  }));
+}
+
+/**
+ * Reparto sin modelo: premia la experiencia en la categoría y penaliza la carga
+ * actual. Es el respaldo cuando la IA no está disponible, y el criterio con el
+ * que se contrasta lo que propone.
+ */
+function pickByScore(candidatos: RoutingCandidate[]): RoutingCandidate {
+  return [...candidatos].sort((a, b) => {
+    const puntaje = (c: RoutingCandidate) => c.resueltosEnCategoria * 2 - c.abiertos;
+    return puntaje(b) - puntaje(a) || a.abiertos - b.abiertos;
+  })[0];
+}
+
+export interface Assignment {
+  tecnicoId: string;
+  nombre: string;
+  motivo: string;
+  /** true cuando el reparto lo decidió el respaldo determinista. */
+  automatico: boolean;
+}
+
+/**
+ * Elige a quién le toca un ticket recién creado. Devuelve null si la
+ * organización no tiene equipo de soporte: en ese caso el ticket se queda en la
+ * cola sin asignar, que es el comportamiento correcto.
+ */
+export async function routeTicket(
+  env: AppEnv,
+  organizationId: number,
+  ticket: { asunto: string; descripcion: string; categoria: string; prioridad: string },
+): Promise<Assignment | null> {
+  const candidatos = await getRoutingCandidates(env, organizationId, ticket.categoria);
+  if (candidatos.length === 0) return null;
+
+  const porDefecto = pickByScore(candidatos);
+
+  if (candidatos.length === 1 || !isAiConfigured()) {
+    return {
+      tecnicoId: porDefecto.id,
+      nombre: porDefecto.nombre,
+      motivo: `Asignado a ${porDefecto.nombre}: ${porDefecto.resueltosEnCategoria} tickets resueltos en ${ticket.categoria} y ${porDefecto.abiertos} abiertos ahora.`,
+      automatico: true,
+    };
+  }
+
+  try {
+    const decision = await suggestAssigneeWithAi(ticket, candidatos);
+    // El modelo a veces adorna el id ("id 2" en vez de "2"); nos quedamos con los
+    // dígitos y, aun así, sólo aceptamos ids que existan de verdad.
+    const idLimpio = String(decision.tecnicoId ?? "").replace(/\D/g, "");
+    const elegido = candidatos.find((c) => c.id === idLimpio);
+    if (elegido) {
+      return {
+        tecnicoId: elegido.id,
+        nombre: elegido.nombre,
+        motivo: decision.motivo,
+        automatico: false,
+      };
+    }
+    console.error("El modelo propuso un técnico inexistente, se usa el reparto por carga");
+  } catch (error) {
+    console.error("Error enrutando el ticket, se usa el reparto por carga:", error);
+  }
+
+  return {
+    tecnicoId: porDefecto.id,
+    nombre: porDefecto.nombre,
+    motivo: `Asignado a ${porDefecto.nombre}: ${porDefecto.resueltosEnCategoria} tickets resueltos en ${ticket.categoria} y ${porDefecto.abiertos} abiertos ahora.`,
+    automatico: true,
+  };
 }

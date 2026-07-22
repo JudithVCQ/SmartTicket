@@ -144,6 +144,78 @@ describe("Separación por rol (BD real)", () => {
     expect((await res.json()).disponible).toBe(false);
   });
 
+  it("un ticket se enruta solo al crearse y deja el motivo en la línea de tiempo", async () => {
+    const creado = await call("/api/tickets", {
+      method: "POST",
+      headers: { ...solicitante.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        asunto: "TMP enrutamiento",
+        descripcion: "No tengo internet en mi puesto y el cable está conectado.",
+      }),
+    });
+    const ticket = await creado.json();
+
+    // Con la IA desactivada en este archivo, decide el reparto por carga.
+    expect(ticket.assigned_to).not.toBeNull();
+
+    const comentarios = await (await call(`/api/tickets/${ticket.id}/comments`)).json();
+    expect(comentarios[0].autor).toBe("Asistente IA");
+    expect(comentarios[0].texto.length).toBeGreaterThan(10);
+
+    await query({}, "DELETE FROM tickets WHERE id = $1", [ticket.id]);
+  });
+
+  it("un técnico puede tomar y soltar un ticket por id", async () => {
+    const creado = await call("/api/tickets", {
+      method: "POST",
+      headers: { ...solicitante.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        asunto: "TMP toma manual",
+        descripcion: "Ticket para verificar la toma desde la cola.",
+      }),
+    });
+    const ticket = await creado.json();
+
+    const tomado = await call(`/api/tickets/${ticket.id}`, {
+      method: "PATCH",
+      headers: { ...tecnico.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ tecnicoId: String(tecnico.id) }),
+    });
+    expect(tomado.status).toBe(200);
+    expect((await tomado.json()).ticket.tecnicoId).toBe(String(tecnico.id));
+
+    // Y se puede devolver a la cola.
+    const liberado = await call(`/api/tickets/${ticket.id}`, {
+      method: "PATCH",
+      headers: { ...tecnico.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ tecnicoId: null }),
+    });
+    expect((await liberado.json()).ticket.tecnicoId).toBeUndefined();
+
+    await query({}, "DELETE FROM tickets WHERE id = $1", [ticket.id]);
+  });
+
+  it("no se puede asignar a alguien que no es del equipo ni de la organización", async () => {
+    const suyos = await (await call("/api/tickets", { headers: solicitante.headers })).json();
+    const id = suyos[0].id;
+
+    // Rosa es `member`: no atiende tickets.
+    const aSolicitante = await call(`/api/tickets/${id}`, {
+      method: "PATCH",
+      headers: { ...tecnico.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ tecnicoId: String(solicitante.id) }),
+    });
+    expect(aSolicitante.status).toBe(400);
+
+    // Un id inexistente tampoco.
+    const inexistente = await call(`/api/tickets/${id}`, {
+      method: "PATCH",
+      headers: { ...tecnico.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ tecnicoId: "999999" }),
+    });
+    expect(inexistente.status).toBe(400);
+  });
+
   it("sólo el owner puede entrar a Organización y al Organigrama", () => {
     // Es la misma función que usan el guard del router y el menú.
     expect(canAccessPath("owner", "/organizacion")).toBe(true);

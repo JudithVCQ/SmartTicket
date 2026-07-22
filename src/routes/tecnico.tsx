@@ -4,6 +4,9 @@ import { AppNav } from "@/components/AppNav";
 import { KpiCard } from "@/components/KpiCard";
 import { TicketCard } from "@/components/TicketCard";
 import { authHeaders, useTickets } from "@/lib/tickets-store";
+import { getAuthSession } from "@/lib/auth-session";
+import { toast } from "sonner";
+import type { Ticket } from "@/lib/mock-data";
 
 interface IncidentCluster {
   titulo: string;
@@ -38,9 +41,33 @@ function slaToHours(sla: string | undefined): number {
   return 24;
 }
 
+type FiltroCola = "Todos" | "Sin asignar" | "Míos";
+const FILTROS_COLA: FiltroCola[] = ["Todos", "Sin asignar", "Míos"];
+
 function TecnicoPage() {
-  const { tickets } = useTickets();
+  const { tickets, updateTicket } = useTickets();
   const [incidentes, setIncidentes] = useState<IncidentCluster[]>([]);
+  const [filtroCola, setFiltroCola] = useState<FiltroCola>("Todos");
+  const [tomando, setTomando] = useState<string | null>(null);
+
+  const sesion = getAuthSession();
+  const miId = sesion?.userId != null ? String(sesion.userId) : undefined;
+
+  /** Autoasignación desde la cola, sin abrir el ticket. */
+  const handleTomar = async (ticket: Ticket) => {
+    setTomando(ticket.id);
+    try {
+      await updateTicket(ticket.id, {
+        tecnicoId: miId,
+        tecnico: sesion?.fullName ?? undefined,
+      });
+      toast.success(`Tomaste el ticket ${ticket.id}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo tomar el ticket.");
+    } finally {
+      setTomando(null);
+    }
+  };
 
   // Se recalcula cuando cambia la cola: si entran 3 tickets de la misma caída,
   // el aviso aparece solo sin que nadie tenga que pedirlo.
@@ -59,13 +86,20 @@ function TecnicoPage() {
     };
   }, [tickets.length]);
 
-  const cola = useMemo(
+  const abiertos = useMemo(
     () => tickets.filter((t) => t.estado !== "Cerrado" && t.estado !== "Resuelto"),
     [tickets],
   );
+  const sinAsignar = useMemo(() => abiertos.filter((t) => !t.tecnicoId), [abiertos]);
+
+  const cola = useMemo(() => {
+    if (filtroCola === "Sin asignar") return sinAsignar;
+    if (filtroCola === "Míos") return abiertos.filter((t) => t.tecnicoId === miId);
+    return abiertos;
+  }, [abiertos, sinAsignar, filtroCola, miId]);
   const altas = useMemo(
-    () => cola.filter((t) => t.prioridad === "Crítica" || t.prioridad === "Alta").length,
-    [cola],
+    () => abiertos.filter((t) => t.prioridad === "Crítica" || t.prioridad === "Alta").length,
+    [abiertos],
   );
 
   // ── Cumplimiento SLA ─────────────────────────────────────────────────────
@@ -238,7 +272,7 @@ function TecnicoPage() {
           />
           <KpiCard
             label="Tickets activos"
-            value={String(cola.length)}
+            value={String(abiertos.length)}
             trend={`${altas} con prioridad alta`}
             delay={100}
           />
@@ -269,12 +303,20 @@ function TecnicoPage() {
                 Cola de Atención Inteligente
               </h2>
               <div className="flex gap-2">
-                <span className="px-2 py-1 bg-muted text-[10px] font-mono border border-border rounded-sm">
-                  FILTRAR: TODO
-                </span>
-                <span className="px-2 py-1 bg-muted text-[10px] font-mono border border-border rounded-sm">
-                  ORDEN: PRIORIDAD IA
-                </span>
+                {FILTROS_COLA.map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFiltroCola(f)}
+                    className={`px-2 py-1 text-[10px] font-mono uppercase border rounded-sm transition-colors ${
+                      f === filtroCola
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    {f}
+                    {f === "Sin asignar" && sinAsignar.length > 0 ? ` (${sinAsignar.length})` : ""}
+                  </button>
+                ))}
               </div>
             </div>
             {cola.length === 0 ? (
@@ -286,7 +328,15 @@ function TecnicoPage() {
                 </p>
               </div>
             ) : (
-              cola.map((t, i) => <TicketCard key={t.id} ticket={t} delay={300 + i * 100} />)
+              cola.map((t, i) => (
+                <TicketCard
+                  key={t.id}
+                  ticket={t}
+                  delay={300 + i * 100}
+                  onTomar={handleTomar}
+                  tomando={tomando === t.id}
+                />
+              ))
             )}
           </div>
 

@@ -21,6 +21,7 @@ export interface Ticket {
   slaProgress: number; // 0..1, 1 = vencido
   creadoEn: string;
   tecnico?: string;
+  tecnicoId?: string;
   creadoPor?: string;
   creadorEmail?: string;
   comentarios?: TicketComment[];

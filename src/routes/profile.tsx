@@ -48,6 +48,7 @@ function ProfilePage() {
         setAuthSession(
           profile?.email || auth.email || undefined,
           {
+            id: profile?.id ?? null,
             fullName: profile?.fullName || null,
             company: profile?.company || null,
             organizationName: profile?.organizationName || null,
@@ -90,6 +91,7 @@ function ProfilePage() {
       setAuthSession(
         email || undefined,
         {
+          id: auth.userId ?? null,
           fullName: name,
           company,
           organizationName: auth.organizationName || null,

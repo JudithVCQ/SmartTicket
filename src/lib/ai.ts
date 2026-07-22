@@ -396,3 +396,72 @@ Instrucciones:
     required: ["borrador"],
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// 6. Enrutamiento: a qué técnico le toca el ticket
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface RoutingCandidate {
+  id: string;
+  nombre: string;
+  /** Tickets abiertos que ya tiene encima. */
+  abiertos: number;
+  /** Cuántos resolvió en la categoría de este ticket. */
+  resueltosEnCategoria: number;
+  resueltosTotal: number;
+}
+
+export interface RoutingDecision {
+  tecnicoId: string;
+  /** Explicación en una frase, citando los números. */
+  motivo: string;
+}
+
+export async function suggestAssigneeWithAi(
+  ticket: { asunto: string; descripcion: string; categoria: string; prioridad: string },
+  candidatos: RoutingCandidate[],
+): Promise<RoutingDecision> {
+  const tabla = candidatos
+    .map(
+      (c) =>
+        `- ${c.nombre} (tecnicoId: ${c.id}) — ${c.abiertos} tickets abiertos ahora · ` +
+        `${c.resueltosEnCategoria} resueltos en "${ticket.categoria}" · ${c.resueltosTotal} resueltos en total`,
+    )
+    .join("\n");
+
+  const prompt = `Eres quien reparte el trabajo en un equipo de soporte. Asigna este ticket a la
+persona más adecuada.
+
+TICKET
+Asunto: ${ticket.asunto}
+Descripción: ${ticket.descripcion}
+Categoría: ${ticket.categoria} · Prioridad: ${ticket.prioridad}
+
+EQUIPO DISPONIBLE
+${tabla}
+
+Cómo decidir:
+- La señal más fuerte es la experiencia en la categoría de ESTE ticket, no el total de
+  tickets resueltos. Alguien con 2 resueltos en "Redes" es mejor opción para un ticket de
+  redes que alguien con 20 resueltos pero ninguno de redes.
+- Sólo descarta a quien tiene la experiencia si está claramente saturado: al menos 3
+  tickets abiertos más que la alternativa. Un experto con 8 abiertos atiende peor que uno
+  competente con 1.
+- En prioridad Crítica la experiencia manda; asume la carga extra.
+- Si nadie tiene experiencia en la categoría, elige a quien menos carga tenga.
+
+Formato de la respuesta:
+- "tecnicoId" debe ser exactamente el número que aparece tras "tecnicoId:" en la lista, sin
+  prefijos ni texto alrededor. Por ejemplo "3", nunca "id 3".
+- El motivo debe ser una sola frase en español citando los números concretos en los que te
+  apoyas, como se lo explicarías al jefe de soporte.`;
+
+  return generateJson<RoutingDecision>(prompt, {
+    type: "object",
+    properties: {
+      tecnicoId: { type: "string", description: "Sólo el número del id, sin prefijos." },
+      motivo: { type: "string", description: "Una frase justificando la elección." },
+    },
+    required: ["tecnicoId", "motivo"],
+  });
+}

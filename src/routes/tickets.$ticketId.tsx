@@ -16,10 +16,12 @@ import {
   PRIORITY_OPTIONS,
   STATUS_OPTIONS,
   authHeaders,
+  toLocalTicketFields,
   useTickets,
+  type TicketPatch,
 } from "@/lib/tickets-store";
 import { slaForPriority, slaProgressForPriority } from "@/lib/ticket-rules";
-import { isStaffSession } from "@/lib/auth-session";
+import { getAuthSession, isStaffSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/tickets/$ticketId")({
   head: ({ params }) => ({
@@ -43,6 +45,19 @@ function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
   // El solicitante consulta y comenta; gestionar el ticket es del equipo.
   const staff = isStaffSession();
+  const [tecnicos, setTecnicos] = useState<Array<{ id: string; nombre: string }>>([]);
+
+  useEffect(() => {
+    if (!staff) return;
+    fetch("/api/org/members", { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) =>
+        setTecnicos(
+          (Array.isArray(data) ? data : []).filter((m: { rol: string }) => m.rol !== "member"),
+        ),
+      )
+      .catch((error) => console.error("Error cargando técnicos:", error));
+  }, [staff]);
 
   useEffect(() => {
     fetch(`/api/tickets/${ticketId}`, { headers: authHeaders() })
@@ -68,6 +83,7 @@ function TicketDetailPage() {
           empresa: data.organization_name || "",
           creadoEn: creadoEn,
           tecnico: data.technician_name || undefined,
+          tecnicoId: data.assigned_to != null ? String(data.assigned_to) : undefined,
           slaRestante: cerrado ? "—" : data.sla || slaForPriority(data.priority),
           slaProgress: cerrado ? 1 : slaProgressForPriority(data.priority),
           creadoPor: data.client,
@@ -90,7 +106,7 @@ function TicketDetailPage() {
     categoria: CATEGORY_OPTIONS[0],
     prioridad: "Media" as Priority,
     estado: "Abierto" as Status,
-    tecnico: "",
+    tecnicoId: "",
   });
   const [comentarios, setComentarios] = useState<TicketComment[]>([]);
   const [nuevoComentario, setNuevoComentario] = useState("");
@@ -107,7 +123,7 @@ function TicketDetailPage() {
       categoria: ticket.categoria,
       prioridad: ticket.prioridad as Priority,
       estado: ticket.estado as Status,
-      tecnico: ticket.tecnico ?? "",
+      tecnicoId: ticket.tecnicoId ?? "",
     });
   }, [
     editing,
@@ -116,7 +132,7 @@ function TicketDetailPage() {
     ticket?.categoria,
     ticket?.prioridad,
     ticket?.estado,
-    ticket?.tecnico,
+    ticket?.tecnicoId,
   ]);
 
   // Los comentarios se cargan del servidor sólo al cambiar de ticket; antes se
@@ -172,12 +188,14 @@ function TicketDetailPage() {
    * este devuelve (SLA recalculado incluido). Antes se avisaba "guardado"
    * aunque la petición fallara.
    */
-  const applyPatch = async (patch: Partial<Ticket>, mensajeOk: string) => {
+  const applyPatch = async (patch: TicketPatch, mensajeOk: string) => {
     if (saving) return false;
     setSaving(true);
     try {
       const updated = await updateTicket(ticket.id, patch);
-      setTicket((prev) => (prev ? { ...prev, ...patch, ...(updated ?? {}) } : null));
+      setTicket((prev) =>
+        prev ? { ...prev, ...toLocalTicketFields(patch), ...(updated ?? {}) } : null,
+      );
       toast.success(mensajeOk);
       return true;
     } catch (error) {
@@ -200,7 +218,8 @@ function TicketDetailPage() {
         categoria: form.categoria,
         prioridad: form.prioridad,
         estado: form.estado,
-        tecnico: form.tecnico.trim() || undefined,
+        // Cadena vacía = "Sin asignar"; null es lo que el API entiende por eso.
+        tecnicoId: form.tecnicoId || null,
       },
       "Cambios guardados.",
     );
@@ -214,6 +233,17 @@ function TicketDetailPage() {
 
   const handleQuickPriority = (prioridad: Priority) =>
     applyPatch({ prioridad }, `Criticidad actualizada: ${prioridad}`);
+
+  const sesion = getAuthSession();
+  const miId = sesion?.userId != null ? String(sesion.userId) : undefined;
+  const esMio = Boolean(miId && ticket.tecnicoId === miId);
+
+  /** Autoasignación en un clic: el técnico toma el ticket de la cola. */
+  const handleTomar = () =>
+    applyPatch(
+      { tecnicoId: miId, tecnico: sesion?.fullName ?? undefined },
+      "Ticket asignado a ti.",
+    );
 
   const handleDelete = async () => {
     if (!window.confirm("¿Eliminar este ticket? Esta acción no se puede deshacer.")) return;
@@ -320,6 +350,15 @@ function TicketDetailPage() {
               <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider border border-border rounded-sm text-muted-foreground">
                 {ticket.categoria}
               </span>
+              <span
+                className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${
+                  ticket.tecnicoId
+                    ? "border-border text-muted-foreground"
+                    : "border-warning/40 bg-warning/10 text-warning"
+                }`}
+              >
+                {esMio ? "Asignado a ti" : ticket.tecnico ? ticket.tecnico : "Sin asignar"}
+              </span>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -341,6 +380,15 @@ function TicketDetailPage() {
               </>
             ) : !staff ? null : (
               <>
+                {!ticket.tecnicoId && (
+                  <button
+                    onClick={handleTomar}
+                    disabled={saving}
+                    className="px-4 py-2 bg-primary text-primary-foreground font-semibold text-sm rounded-sm hover:bg-primary/90 transition-colors disabled:opacity-60"
+                  >
+                    Tomar este ticket
+                  </button>
+                )}
                 <button
                   onClick={handleDelete}
                   className="px-4 py-2 border border-destructive/60 text-destructive font-semibold text-sm rounded-sm hover:bg-destructive hover:text-destructive-foreground transition-colors"
@@ -512,12 +560,19 @@ function TicketDetailPage() {
                   <span className="block text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
                     Técnico asignado
                   </span>
-                  <input
-                    value={form.tecnico}
-                    onChange={(e) => setForm((f) => ({ ...f, tecnico: e.target.value }))}
-                    placeholder="Sin asignar"
-                    className="w-full h-9 px-3 border border-border bg-background rounded-sm text-sm focus:outline-none focus:border-foreground"
-                  />
+                  <select
+                    value={form.tecnicoId}
+                    onChange={(e) => setForm((f) => ({ ...f, tecnicoId: e.target.value }))}
+                    className="w-full h-9 px-2 border border-border bg-background rounded-sm text-sm"
+                  >
+                    <option value="">Sin asignar</option>
+                    {tecnicos.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre}
+                        {t.id === miId ? " (tú)" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             ) : (
