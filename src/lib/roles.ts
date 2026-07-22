@@ -30,10 +30,18 @@ export function isOwner(role: Role): boolean {
   return role === "owner";
 }
 
-/** Rutas que un `member` no debe abrir; el guard del router lo manda a sus tickets. */
-export const STAFF_ONLY_PATHS = ["/dashboard", "/tecnico", "/equipo", "/organizacion"];
+/** Configurar la empresa y ver su organigrama es cosa de quien la administra. */
+export const OWNER_ONLY_PATHS = ["/organizacion", "/organigrama"];
+
+/** Pantallas de operación: fuera del alcance de quien sólo reporta incidencias. */
+export const STAFF_ONLY_PATHS = ["/dashboard", "/tecnico", "/equipo"];
+
+function matches(paths: string[], pathname: string) {
+  return paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 export function canAccessPath(role: Role, pathname: string): boolean {
-  if (isStaff(role)) return true;
-  return !STAFF_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (matches(OWNER_ONLY_PATHS, pathname)) return isOwner(role);
+  if (matches(STAFF_ONLY_PATHS, pathname)) return isStaff(role);
+  return true;
 }

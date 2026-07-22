@@ -13,6 +13,7 @@ import { Route as TecnicoRouteImport } from './routes/tecnico'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as OrganizacionRouteImport } from './routes/organizacion'
+import { Route as OrganigramaRouteImport } from './routes/organigrama'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as EquipoRouteImport } from './routes/equipo'
@@ -40,6 +41,11 @@ const ProfileRoute = ProfileRouteImport.update({
 const OrganizacionRoute = OrganizacionRouteImport.update({
   id: '/organizacion',
   path: '/organizacion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrganigramaRoute = OrganigramaRouteImport.update({
+  id: '/organigrama',
+  path: '/organigrama',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/equipo': typeof EquipoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/organigrama': typeof OrganigramaRoute
   '/organizacion': typeof OrganizacionRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/equipo': typeof EquipoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/organigrama': typeof OrganigramaRoute
   '/organizacion': typeof OrganizacionRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/equipo': typeof EquipoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/organigrama': typeof OrganigramaRoute
   '/organizacion': typeof OrganizacionRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/equipo'
     | '/forgot-password'
     | '/login'
+    | '/organigrama'
     | '/organizacion'
     | '/profile'
     | '/register'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/equipo'
     | '/forgot-password'
     | '/login'
+    | '/organigrama'
     | '/organizacion'
     | '/profile'
     | '/register'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/equipo'
     | '/forgot-password'
     | '/login'
+    | '/organigrama'
     | '/organizacion'
     | '/profile'
     | '/register'
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   EquipoRoute: typeof EquipoRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  OrganigramaRoute: typeof OrganigramaRoute
   OrganizacionRoute: typeof OrganizacionRoute
   ProfileRoute: typeof ProfileRoute
   RegisterRoute: typeof RegisterRoute
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/organizacion'
       fullPath: '/organizacion'
       preLoaderRoute: typeof OrganizacionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/organigrama': {
+      id: '/organigrama'
+      path: '/organigrama'
+      fullPath: '/organigrama'
+      preLoaderRoute: typeof OrganigramaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   EquipoRoute: EquipoRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  OrganigramaRoute: OrganigramaRoute,
   OrganizacionRoute: OrganizacionRoute,
   ProfileRoute: ProfileRoute,
   RegisterRoute: RegisterRoute,

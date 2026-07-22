@@ -207,6 +207,11 @@ async function applyAdditiveMigrations(env: AppEnv) {
        ON tickets (organization_id, requester_id)`,
   );
 
+  // Prioridad que asignó la IA al crear el ticket. Se conserva aunque un humano
+  // la cambie después: la diferencia entre ambas es la corrección de la que el
+  // clasificador aprende los criterios de cada empresa.
+  await query(env, `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ai_priority TEXT`);
+
   // Dominio de correo corporativo: permite que un trabajador se registre solo y
   // caiga en la organización correcta sin que nadie lo invite.
   await query(env, `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS domain TEXT`);

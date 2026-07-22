@@ -18,6 +18,10 @@ jest.mock("../../src/lib/mailer", () => ({
 
 import server from "../../src/server";
 import { closePool, query } from "../../src/lib/db";
+import { canAccessPath } from "../../src/lib/roles";
+
+// La primera conexión SSL a Aiven puede tardar más que el timeout por defecto.
+jest.setTimeout(60000);
 
 const JWT_SECRET = process.env.JWT_SECRET || "smartticket-dev-secret";
 
@@ -138,6 +142,39 @@ describe("Separación por rol (BD real)", () => {
     // Con la IA desactivada responde 200 y `disponible:false`, no 403.
     expect(res.status).toBe(200);
     expect((await res.json()).disponible).toBe(false);
+  });
+
+  it("sólo el owner puede entrar a Organización y al Organigrama", () => {
+    // Es la misma función que usan el guard del router y el menú.
+    expect(canAccessPath("owner", "/organizacion")).toBe(true);
+    expect(canAccessPath("tech", "/organizacion")).toBe(false);
+    expect(canAccessPath("member", "/organizacion")).toBe(false);
+
+    expect(canAccessPath("owner", "/organigrama")).toBe(true);
+    expect(canAccessPath("tech", "/organigrama")).toBe(false);
+
+    // El técnico conserva el resto de la operación.
+    expect(canAccessPath("tech", "/tecnico")).toBe(true);
+    expect(canAccessPath("tech", "/dashboard")).toBe(true);
+    expect(canAccessPath("tech", "/equipo")).toBe(true);
+
+    // Y el solicitante sólo sus tickets.
+    expect(canAccessPath("member", "/tecnico")).toBe(false);
+    expect(canAccessPath("member", "/tickets")).toBe(true);
+    expect(canAccessPath("member", "/tickets/new")).toBe(true);
+  });
+
+  it("el organigrama trae la estructura con la carga de cada uno", async () => {
+    const res = await call("/api/org/members", { headers: tecnico.headers });
+    const miembros = await res.json();
+
+    const ana = miembros.find((m: any) => m.nombre === "Ana Paredes");
+    const rosa = miembros.find((m: any) => m.nombre === "Rosa Medina");
+
+    expect(ana.rol).toBe("owner");
+    expect(rosa.rol).toBe("member");
+    expect(rosa.totalReportados).toBeGreaterThan(0);
+    expect(typeof ana.abiertosAsignados).toBe("number");
   });
 
   it("la lista del equipo sólo la ve el equipo", async () => {

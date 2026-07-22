@@ -275,6 +275,39 @@ async function resolveNextSla(
 }
 
 /** GET /api/org/members: personas de la organización, para registrar a nombre de otro. */
+/**
+ * Últimas veces que alguien del equipo cambió la prioridad que había puesto la
+ * IA. Se le devuelven como ejemplos para que aprenda el criterio de urgencia de
+ * esa empresa, que no es el mismo en todas.
+ */
+async function getPriorityCorrections(appEnv: Record<string, string>, request: Request) {
+  // Sin sesión no sabemos a qué organización pertenece quien reporta, así que
+  // no hay criterio propio del que aprender.
+  if (!getAuthenticatedUser(request, appEnv)) return [];
+
+  try {
+    const actor = await getActor(request, appEnv);
+    const result = await query(
+      appEnv,
+      `SELECT subject, ai_priority, priority FROM tickets
+       WHERE organization_id = $1
+         AND ai_priority IS NOT NULL
+         AND priority <> ai_priority
+       ORDER BY updated_at DESC LIMIT 8`,
+      [actor.organizationId],
+    );
+    return result.rows.map((row) => ({
+      asunto: row.subject as string,
+      sugerida: row.ai_priority as string,
+      corregida: row.priority as string,
+    }));
+  } catch (error) {
+    // El aprendizaje es una mejora, no un requisito: si falla se clasifica igual.
+    console.error("No se pudieron leer las correcciones de prioridad:", error);
+    return [];
+  }
+}
+
 async function handleOrgApi(request: Request, env: unknown) {
   const url = new URL(request.url);
   const appEnv = env as Record<string, string>;
@@ -290,9 +323,19 @@ async function handleOrgApi(request: Request, env: unknown) {
 
     const result = await query(
       appEnv,
-      `SELECT id, full_name, email, role FROM users
-       WHERE organization_id = $1
-       ORDER BY full_name NULLS LAST, email`,
+      `SELECT u.id, u.full_name, u.email, u.role,
+              COUNT(*) FILTER (
+                WHERE t.assigned_to = u.id AND t.status NOT IN ('Resuelto', 'Cerrado')
+              ) AS abiertos_asignados,
+              COUNT(*) FILTER (WHERE t.assigned_to = u.id) AS total_asignados,
+              COUNT(*) FILTER (WHERE t.requester_id = u.id) AS total_reportados
+       FROM users u
+       LEFT JOIN tickets t
+         ON t.organization_id = u.organization_id
+        AND (t.assigned_to = u.id OR t.requester_id = u.id)
+       WHERE u.organization_id = $1
+       GROUP BY u.id, u.full_name, u.email, u.role
+       ORDER BY u.full_name NULLS LAST, u.email`,
       [actor.organizationId],
     );
 
@@ -302,6 +345,9 @@ async function handleOrgApi(request: Request, env: unknown) {
         nombre: (row.full_name as string) || (row.email as string),
         email: row.email,
         rol: row.role,
+        abiertosAsignados: Number(row.abiertos_asignados ?? 0),
+        totalAsignados: Number(row.total_asignados ?? 0),
+        totalReportados: Number(row.total_reportados ?? 0),
       })),
       200,
     );
@@ -428,7 +474,11 @@ async function handleTicketsApi(request: Request, env: unknown) {
     let prioridad = classifyPriority(texto);
 
     try {
-      const iaResult = await categorizeTicketWithAi(asunto, descripcion);
+      const iaResult = await categorizeTicketWithAi(
+        asunto,
+        descripcion,
+        await getPriorityCorrections(appEnv, request),
+      );
       categoria = iaResult.categoria;
       if (isPriority(iaResult.prioridad)) {
         prioridad = iaResult.prioridad;
@@ -487,8 +537,8 @@ async function handleTicketsApi(request: Request, env: unknown) {
       const result = await query(
         appEnv,
         `INSERT INTO tickets (organization_id, subject, description, client, category,
-                              priority, status, sla, created_by, requester_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+                              priority, status, sla, created_by, requester_id, ai_priority)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [
           organizationId,
           asunto,
@@ -500,6 +550,7 @@ async function handleTicketsApi(request: Request, env: unknown) {
           sla,
           creadoPor,
           solicitante,
+          prioridad,
         ],
       );
 

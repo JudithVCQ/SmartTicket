@@ -1,20 +1,23 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { clearAuthSession, isAuthenticated, isStaffSession } from "@/lib/auth-session";
+import { clearAuthSession, getSessionRole, isAuthenticated } from "@/lib/auth-session";
+import { canAccessPath } from "@/lib/roles";
 
 const links = [
-  { to: "/dashboard", label: "Inicio", staffOnly: true },
-  { to: "/tickets", label: "Mis Tickets", staffOnly: false },
-  { to: "/tecnico", label: "Operaciones", staffOnly: true },
-  { to: "/equipo", label: "Equipo", staffOnly: true },
-  { to: "/organizacion", label: "Organización", staffOnly: true },
+  { to: "/dashboard", label: "Inicio" },
+  { to: "/tickets", label: "Mis Tickets" },
+  { to: "/tecnico", label: "Operaciones" },
+  { to: "/equipo", label: "Equipo" },
+  { to: "/organigrama", label: "Organigrama" },
+  { to: "/organizacion", label: "Organización" },
 ] as const;
 
 export function AppNav() {
   const navigate = useNavigate();
   const authenticated = isAuthenticated();
-  // Quien sólo reporta incidencias ve un menú reducido: crear y seguir lo suyo.
-  const staff = isStaffSession();
-  const visibles = links.filter((l) => staff || !l.staffOnly);
+  // El menú se arma con las mismas reglas que protegen las rutas, para que no
+  // aparezca nunca un enlace que luego rebota.
+  const role = getSessionRole();
+  const visibles = links.filter((l) => canAccessPath(role, l.to));
 
   const handleLogout = () => {
     clearAuthSession();

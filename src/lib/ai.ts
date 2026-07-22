@@ -101,11 +101,33 @@ async function generateJson<T>(prompt: string, responseSchema: JsonSchema): Prom
   return JSON.parse(message.content) as T;
 }
 
-export async function categorizeTicketWithAi(asunto: string, descripcion: string) {
+/** Una vez que un humano corrigió a la IA, esa corrección enseña el criterio real. */
+export interface PriorityCorrection {
+  asunto: string;
+  /** Lo que había puesto la IA. */
+  sugerida: string;
+  /** Lo que decidió el equipo. */
+  corregida: string;
+}
+
+export async function categorizeTicketWithAi(
+  asunto: string,
+  descripcion: string,
+  correcciones: PriorityCorrection[] = [],
+) {
+  // El criterio de urgencia no es universal: para una empresa "no imprime la
+  // térmica" es Crítica y para otra es Media. En vez de reentrenar el modelo,
+  // le mostramos cómo ha corregido antes este equipo concreto.
+  const aprendizaje = correcciones.length
+    ? `\nCRITERIO DE ESTE EQUIPO (correcciones que hicieron sobre clasificaciones previas):
+${correcciones.map((c) => `- "${c.asunto}": tú dijiste ${c.sugerida}, ellos lo trataron como ${c.corregida}.`).join("\n")}
+Ajusta tu criterio a estos ejemplos cuando el caso sea parecido.\n`
+    : "";
+
   const prompt = `Analiza el siguiente ticket de soporte técnico y extrae la categoría y la prioridad.
 Asunto: ${asunto}
 Descripción: ${descripcion}
-
+${aprendizaje}
 Asigna la categoría más adecuada (ej. Facturación, Redes, Software, Hardware, Inventario, Capacitación, etc.).
 Asigna la prioridad estricta como una de las siguientes opciones: Crítica, Alta, Media, Baja.
 `;
